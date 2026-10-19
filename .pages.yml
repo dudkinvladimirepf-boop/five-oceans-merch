@@ -1,0 +1,40 @@
+
+media:
+  input: media
+  output: /media
+  rename: safe
+
+content:
+  - name: products
+    label: Товары
+    type: file
+    path: data/products.json
+    format: json
+    list: true
+    fields:
+      - name: title
+        label: Название товара
+        type: string
+        required: true
+      - name: description
+        label: Описание
+        type: text
+      - name: price
+        label: Цена в рублях
+        type: number
+      - name: category
+        label: Категория
+        type: string
+      - name: photos
+        label: Фотографии
+        type: image
+        options:
+          multiple:
+            max: 6
+      - name: sizes
+        label: Размеры
+        type: string
+        list: true
+      - name: available
+        label: В наличии
+        type: boolean
