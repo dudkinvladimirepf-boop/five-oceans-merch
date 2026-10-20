@@ -1,0 +1,315 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Корзина — 5 океанов</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f5f7fa;
+  color: #14283a;
+  font-family: Arial, sans-serif;
+}
+a { color: inherit; text-decoration: none; }
+header { background: #102c43; color: white; padding: 22px 6%; }
+nav {
+  max-width: 1100px;
+  margin: auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+main { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+.item {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 16px 0;
+  padding: 18px;
+  background: white;
+  border-radius: 12px;
+}
+.item img {
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+}
+.details { flex: 1; min-width: 0; }
+.details h3 { margin-top: 0; }
+.price { font-weight: bold; }
+.quantity { width: 75px; padding: 10px; }
+button {
+  border: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.remove { background: #f4e8e8; color: #962d2d; }
+.total {
+  padding: 25px;
+  background: white;
+  border-radius: 12px;
+  margin-top: 25px;
+  font-size: 22px;
+  font-weight: bold;
+  text-align: right;
+}
+.note { color: #71808e; font-size: 14px; line-height: 1.5; }
+.warning { color: #a03b3b; font-size: 14px; }
+@media(max-width: 600px) {
+  .item { flex-wrap: wrap; gap: 12px; }
+  .item img { width: 85px; height: 85px; }
+  .details { flex-basis: calc(100% - 110px); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <nav>
+    <a href="/"><strong>5 ОКЕАНОВ</strong></a>
+    <a href="/">← Продолжить покупки</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Корзина</h1>
+  <p class="note">
+    Здесь находятся товары, которые вы выбрали.
+    Корзина хранится только в вашем браузере.
+  </p>
+
+  <div id="cart">Загружаем корзину...</div>
+  <div id="summary"></div>
+
+  <p class="note">
+    Оформление заказа через Telegram подключим
+    на следующем этапе.
+  </p>
+</main>
+
+<script>
+const CART_KEY = "five-oceans-cart-v1";
+
+const cartContainer = document.getElementById("cart");
+const summary = document.getElementById("summary");
+
+let cart = [];
+let products = [];
+
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function money(value) {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0
+  }).format(value);
+}
+
+function saveCart() {
+  try {
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    return true;
+  } catch (error) {
+    alert("Не удалось сохранить корзину в браузере.");
+    return false;
+  }
+}
+
+function renderCart() {
+  cartContainer.replaceChildren();
+  summary.replaceChildren();
+
+  if (!cart.length) {
+    cartContainer.textContent = "Корзина пока пуста.";
+    return;
+  }
+
+  let total = 0;
+  let hasUnavailable = false;
+
+  cart.forEach((item, index) => {
+    const product = products.find(p => p.slug === item.slug);
+
+    const row = element("div", undefined, "item");
+
+    if (!product) {
+      row.appendChild(
+        element("p", "Товар больше не найден в каталоге.")
+      );
+    } else {
+      const photo = product.photos?.[0];
+
+      if (photo) {
+        const img = document.createElement("img");
+        img.src = photo;
+        img.alt = product.title || "Товар";
+        row.appendChild(img);
+      }
+
+      const details = element("div", undefined, "details");
+
+      const title = element("h3", product.title || "Товар");
+      details.appendChild(title);
+
+      if (item.size) {
+        details.appendChild(
+          element("p", "Размер: " + item.size)
+        );
+      }
+
+      const sizes = Array.isArray(product.sizes)
+        ? product.sizes.map(String) : [];
+
+      const sizeValid = !sizes.length ||
+        sizes.includes(String(item.size));
+
+      const available = product.available === true &&
+        sizeValid;
+
+      const price = Number(product.price);
+      const priceValid = product.price != null &&
+        product.price !== "" &&
+        Number.isFinite(price) && price >= 0;
+
+      if (!available) {
+        details.appendChild(
+          element("p", "Товар или размер больше не доступен.", "warning")
+        );
+      }
+
+      if (!priceValid) {
+        details.appendChild(
+          element("p", "Цена уточняется.", "warning")
+        );
+      }
+
+      const quantity = Math.max(1,
+        Math.min(99, Math.trunc(Number(item.quantity) || 1)));
+
+      item.quantity = quantity;
+
+      if (available && priceValid) {
+        const subtotal = price * quantity;
+        total += subtotal;
+
+        details.appendChild(
+          element("p", "Стоимость: " + money(subtotal), "price")
+        );
+      } else {
+        hasUnavailable = true;
+      }
+
+      row.appendChild(details);
+
+      const qtyBox = element("div");
+
+      qtyBox.appendChild(element("p", "Количество:"));
+
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number";
+      qtyInput.min = "1";
+      qtyInput.max = "99";
+      qtyInput.step = "1";
+      qtyInput.value = String(quantity);
+      qtyInput.className = "quantity";
+
+      qtyInput.addEventListener("change", () => {
+        const n = Number(qtyInput.value);
+
+        if (!Number.isInteger(n) || n < 1 || n > 99) {
+          qtyInput.value = String(item.quantity);
+          return;
+        }
+
+        item.quantity = n;
+        if (saveCart()) renderCart();
+      });
+
+      qtyBox.appendChild(qtyInput);
+      row.appendChild(qtyBox);
+    }
+
+    const remove = element("button", "Удалить", "remove");
+    remove.type = "button";
+
+    remove.addEventListener("click", () => {
+      cart.splice(index, 1);
+      if (saveCart()) renderCart();
+    });
+
+    row.appendChild(remove);
+    cartContainer.appendChild(row);
+  });
+
+  const totalBox = element(
+    "div",
+    "Итого: " + money(total),
+    "total"
+  );
+
+  summary.appendChild(totalBox);
+
+  if (hasUnavailable) {
+    summary.appendChild(
+      element(
+        "p",
+        "Недоступные товары и позиции без цены " +
+        "не включены в итоговую сумму.",
+        "warning"
+      )
+    );
+  }
+
+  summary.appendChild(
+    element(
+      "p",
+      "Наличие и окончательная стоимость " +
+      "подтверждаются при оформлении заказа.",
+      "note"
+    )
+  );
+}
+
+async function init() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(CART_KEY) || "[]"
+    );
+
+    cart = Array.isArray(saved) ? saved : [];
+
+    const response = await fetch(
+      "/data/products.json",
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) throw new Error("Ошибка загрузки");
+
+    products = await response.json();
+
+    if (!Array.isArray(products)) {
+      throw new Error("Неверный формат товаров");
+    }
+
+    renderCart();
+  } catch (error) {
+    cartContainer.textContent =
+      "Не удалось загрузить корзину.";
+    console.error(error);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
