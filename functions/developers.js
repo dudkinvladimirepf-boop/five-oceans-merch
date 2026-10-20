@@ -301,6 +301,7 @@ async function recentOrders(env) {
     `SELECT
        o.order_id,
        o.status,
+       o.shipping_status,
        o.created_at,
        o.updated_at,
        i.product_slug,
@@ -309,7 +310,7 @@ async function recentOrders(env) {
        i.quantity,
        i.unit_price
      FROM (
-       SELECT order_id, status, created_at, updated_at
+       SELECT order_id, status, shipping_status, created_at, updated_at
        FROM orders
        ORDER BY created_at DESC, order_id DESC
        LIMIT 100
@@ -327,6 +328,7 @@ async function recentOrders(env) {
     if (!order) {
       order = {
         order_id: row.order_id, status: row.status,
+        shipping_status: row.shipping_status,
         created_at: row.created_at, updated_at: row.updated_at,
         items: [], total: 0
       };
@@ -512,12 +514,93 @@ function renderOrderButton(order, csrf, action, label, colorClass) {
   `;
 }
 
+
+/*
+  Независимая визуальная отметка отправки.
+  Обновляет ТОЛЬКО orders.shipping_status:
+  не меняет основной статус, резерв, оплаты, остатки.
+*/
+async function changeShippingStatus(context, form) {
+  const orderId = String(form.get("order_id") || "");
+  const expected = String(form.get("expected_shipping_status") || "");
+  const next = String(form.get("shipping_status") || "");
+
+  if (!/^FO-\\d{8}-[0-9A-F]{12}$/.test(orderId)) {
+    throw new Error("Некорректный номер заказа.");
+  }
+
+  if (
+    !["not_shipped", "shipped"].includes(expected) ||
+    !["not_shipped", "shipped"].includes(next) ||
+    expected === next
+  ) {
+    throw new Error("Некорректный статус отправки.");
+  }
+
+  const db = database(context.env);
+
+  // Проверяем предыдущее значение для защиты от устаревшей формы.
+  const result = await db.prepare(
+    `UPDATE orders
+     SET shipping_status = ?
+     WHERE order_id = ?
+       AND shipping_status = ?`
+  ).bind(next, orderId, expected).run();
+
+  if (Number(result.meta?.changes || 0) === 1) {
+    return "Заказ " + orderId + ": " +
+      (next === "shipped" ? "Отправлено." : "Не отправлено.");
+  }
+
+  const current = await db.prepare(
+    "SELECT shipping_status FROM orders WHERE order_id = ?"
+  ).bind(orderId).first();
+
+  if (!current) {
+    throw new Error("Заказ не найден.");
+  }
+
+  if (current.shipping_status === next) {
+    // Повторная отправка той же формы не меняет данные повторно.
+    return "Заказ " + orderId + " уже имеет статус «" +
+      (next === "shipped" ? "Отправлено" : "Не отправлено") + "».";
+  }
+
+  throw new Error(
+    "Статус отправки изменился в другой вкладке. " +
+    "Обновите страницу и попробуйте ещё раз."
+  );
+}
+
+function renderShippingButton(order, csrf, current) {
+  const target = current === "shipped" ? "not_shipped" : "shipped";
+  const label = target === "shipped"
+    ? "Отметить отправленным"
+    : "Вернуть в «Не отправлено»";
+
+  return `
+    <form method="POST" action="/developers#orders">
+      ${hidden("action", "order-shipping")}
+      ${hidden("csrf", csrf)}
+      ${hidden("order_id", order.order_id)}
+      ${hidden("expected_shipping_status", current)}
+      ${hidden("shipping_status", target)}
+      <button type="submit" class="shipping-button">
+        ${esc(label)}
+      </button>
+    </form>
+  `;
+}
+
 function renderOrders(orders, csrf) {
   if (!orders.length) {
     return '<p class="muted">Оформленных заказов пока нет.</p>';
   }
   return orders.map(order => {
     const status = String(order.status || "pending");
+    const shippingStatus = order.shipping_status === "shipped"
+      ? "shipped"
+      : "not_shipped";
     const cssStatus = [
       "pending", "reserved", "sold", "cancelled", "expired"
     ].includes(status) ? status : "unknown";
@@ -541,6 +624,9 @@ function renderOrders(orders, csrf) {
           <span class="order-title">${esc(order.order_id)}</span>
           <span class="status-pill status-${cssStatus}">
             ${esc(orderStatusLabel(status))}
+          </span>
+          <span class="status-pill shipping-${shippingStatus === "shipped" ? "sent" : "unsent"}">
+            ${shippingStatus === "shipped" ? "Отправлено" : "Не отправлено"}
           </span>
           <span class="order-meta">
             ${esc(String(order.created_at || ""))} UTC
@@ -588,6 +674,10 @@ function renderOrders(orders, csrf) {
                 : "Оплачено — списывает товар и снимает резерв. Отменить — освобождает резерв."}
             </p>
           ` : ""}
+          <div class="shipping-actions">
+            <span class="shipping-label">Отправка</span>
+            ${renderShippingButton(order, csrf, shippingStatus)}
+          </div>
 
         </div>
       </details>
@@ -1605,6 +1695,27 @@ td small {
 .status-sold { background: #eaf7ee; color: #28734a; }
 .status-cancelled, .status-expired { background: #fff0f0; color: #a03b3b; }
 .status-unknown { background: #edf1f5; color: #506574; }
+.shipping-unsent { background: #f0f1f3; color: #64717b; }
+.shipping-sent { background: #e2f5e9; color: #246842; }
+.shipping-actions {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid #e8edf1;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.shipping-actions form { margin: 0; }
+.shipping-label { font-size: 13px; color: #71808e; }
+.shipping-button {
+  background: #edf1f5;
+  border: 1px solid #cbd5df;
+  color: #14283a;
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+.shipping-button:hover { background: #e1eaf1; }
 .order-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 19px; padding-top: 17px; border-top: 1px solid #dce5eb; }
 .order-actions form { margin: 0; }
 .order-actions button { padding: 11px 15px; border-radius: 8px; font-size: 14px; }
@@ -1763,6 +1874,10 @@ export async function onRequestPost(context) {
 
   try {
     switch (action) {
+      case "order-shipping":
+        message = await changeShippingStatus(context, form);
+        break;
+
       case "order-reserve":
       case "order-paid":
       case "order-cancel":
