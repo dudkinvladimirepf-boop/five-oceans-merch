@@ -226,9 +226,46 @@ footer {
   text-align: center;
 }
 
+.footer-content {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-brand {
+  grid-column: 2;
+}
+
+.footer-developers {
+  justify-self: end;
+  font-size: 13px;
+  padding: 6px 0;
+  text-underline-offset: 4px;
+}
+
+.footer-developers:hover,
+.footer-developers:focus-visible {
+  color: white;
+  text-decoration: underline;
+}
+
+.footer-developers:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
 /* МОБИЛЬНАЯ ВЕРСИЯ */
 
 @media (max-width: 600px) {
+  .footer-content {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-brand {
+    grid-column: 1;
+  }
+
   header {
     padding: 18px;
   }
@@ -335,7 +372,10 @@ footer {
 </main>
 
 <footer>
-  Клуб «5 океанов»
+  <div class="footer-content">
+    <span class="footer-brand">Клуб «5 океанов»</span>
+    <a class="footer-developers" href="/developers">Для разработчиков</a>
+  </div>
 </footer>
 
 <script>
