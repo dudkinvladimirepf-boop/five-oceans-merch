@@ -296,7 +296,11 @@ async function excludedRows(env) {
   return result.results || [];
 }
 
-async function recentOrders(env) {
+async function recentOrders(env, filters = {}) {
+  const number = String(filters.order_number || "");
+  const status = String(filters.order_status || "");
+  const shipping = String(filters.order_shipping || "");
+  const product = String(filters.order_product || "");
   const result = await database(env).prepare(
     `SELECT
        o.order_id,
@@ -312,6 +316,14 @@ async function recentOrders(env) {
      FROM (
        SELECT order_id, status, shipping_status, created_at, updated_at
        FROM orders
+       WHERE (? = '' OR instr(lower(order_id), lower(?)) > 0)
+         AND (? = '' OR status = ?)
+         AND (? = '' OR shipping_status = ?)
+         AND (? = '' OR EXISTS (
+           SELECT 1 FROM order_items AS matched
+           WHERE matched.order_id = orders.order_id
+             AND matched.product_title = ?
+         ))
        ORDER BY created_at DESC, order_id DESC
        LIMIT 100
      ) AS o
@@ -319,7 +331,7 @@ async function recentOrders(env) {
        ON i.order_id = o.order_id
      ORDER BY o.created_at DESC, o.order_id DESC,
               i.product_slug, i.size`
-  ).all();
+  ).bind(number, number, status, status, shipping, shipping, product, product).all();
 
   const orders = [];
   const byId = new Map();
@@ -683,6 +695,177 @@ function renderOrders(orders, csrf) {
       </details>
     `;
   }).join("");
+}
+
+function readDashboardFilters(request) {
+  const p = new URL(request.url).searchParams;
+  const value = (name, max) => String(p.get(name) || "").slice(0, max).trim();
+  return {
+    stock_product: value("stock_product", 300),
+    stock_size: value("stock_size", 110),
+    stock_reserved: value("stock_reserved", 10),
+    order_number: value("order_number", 80),
+    order_status: value("order_status", 30),
+    order_shipping: value("order_shipping", 30),
+    order_product: value("order_product", 300)
+  };
+}
+
+function filteredQuery(filters) {
+  const p = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) p.set(key, value);
+  }
+  return p.toString();
+}
+
+function optionHtml(items, selected, allLabel) {
+  const opts = [`<option value="">${esc(allLabel)}</option>`];
+  for (const item of items) {
+    const value = String(item.value);
+    opts.push(
+      `<option value="${esc(value)}"${value === selected ? " selected" : ""}>` +
+      `${esc(item.label)}</option>`
+    );
+  }
+  return opts.join("");
+}
+
+function retainFilters(filters, prefix) {
+  return Object.entries(filters).filter(([key, value]) =>
+    !key.startsWith(prefix) && value
+  ).map(([key, value]) => hidden(key, value)).join("\n");
+}
+
+function filterStockRows(rows, products, filters) {
+  const product = filters.stock_product;
+  const size = filters.stock_size;
+  const reserve = filters.stock_reserved;
+  return rows.filter(item =>
+    (!product || String(item.product_slug) === product) &&
+    (!size || ("size:" + String(item.size || "")) === size) &&
+    (reserve !== "yes" || Number(item.reserved_quantity) > 0) &&
+    (reserve !== "no" || Number(item.reserved_quantity) === 0)
+  );
+}
+
+function renderStockFilters(rows, products, filters) {
+  const names = productNames(products);
+  const bySlug = new Map();
+  const sizes = new Set();
+
+  for (const item of rows) {
+    const slug = String(item.product_slug);
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, getProductTitle(item, names));
+    }
+    sizes.add(String(item.size || ""));
+  }
+  const productsList = [...bySlug].map(([value, title]) => ({
+    value, label: title
+  })).sort((a, b) =>
+    a.label.localeCompare(b.label, "ru") ||
+    a.value.localeCompare(b.value, "ru")
+  );
+  const sizeList = [...sizes].map(size => ({
+    value: "size:" + size,
+    label: size || "Без размера"
+  })).sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+  return `
+    <form method="GET" action="/developers#stock" class="filters-form">
+      ${retainFilters(filters, "stock_")}
+      <div class="filters-grid">
+        <div class="filter-field">
+          <label for="stock-product">Товар</label>
+          <select id="stock-product" name="stock_product">
+            ${optionHtml(productsList, filters.stock_product, "Все товары")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="stock-size">Размер</label>
+          <select id="stock-size" name="stock_size">
+            ${optionHtml(sizeList, filters.stock_size, "Все размеры")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="stock-reserved">Резерв</label>
+          <select id="stock-reserved" name="stock_reserved">
+            ${optionHtml([
+              {value:"yes", label:"Есть резерв"},
+              {value:"no", label:"Без резерва"}
+            ], filters.stock_reserved, "Любой резерв")}
+          </select>
+        </div>
+        <div class="filter-controls">
+          <button type="submit" class="blue-button">Найти</button>
+          <a href="/developers#stock" class="filter-reset">Сбросить все</a>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+function renderOrderFilters(options, filters) {
+  return `
+    <form method="GET" action="/developers#orders" class="filters-form">
+      ${retainFilters(filters, "order_")}
+      <div class="filters-grid">
+        <div class="filter-field">
+          <label for="order-number">Номер заказа</label>
+          <input id="order-number" type="search" name="order_number"
+            value="${esc(filters.order_number)}" maxlength="80"
+            placeholder="Например, FO-2026…">
+        </div>
+        <div class="filter-field">
+          <label for="order-status">Статус заказа</label>
+          <select id="order-status" name="order_status">
+            ${optionHtml(options.statuses.map(status => ({
+              value: status, label: orderStatusLabel(status)
+            })), filters.order_status, "Любой статус")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="order-shipping">Статус отправки</label>
+          <select id="order-shipping" name="order_shipping">
+            ${optionHtml(options.shipping.map(status => ({
+              value: status,
+              label: status === "shipped" ? "Отправлено" :
+                status === "not_shipped" ? "Не отправлено" : status
+            })), filters.order_shipping, "Любая отправка")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="order-product">Товар в заказе</label>
+          <select id="order-product" name="order_product">
+            ${optionHtml(options.products.map(title => ({
+              value: title, label: title
+            })), filters.order_product, "Все товары")}
+          </select>
+        </div>
+        <div class="filter-controls">
+          <button type="submit" class="blue-button">Найти</button>
+          <a href="/developers#orders" class="filter-reset">Сбросить все</a>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+async function orderFilterOptions(env) {
+  const db = database(env);
+  const [statuses, shipping, products] = await Promise.all([
+    db.prepare("SELECT DISTINCT status FROM orders ORDER BY status").all(),
+    db.prepare("SELECT DISTINCT shipping_status FROM orders ORDER BY shipping_status").all(),
+    db.prepare(
+      "SELECT DISTINCT product_title FROM order_items ORDER BY product_title"
+    ).all()
+  ]);
+  return {
+    statuses: (statuses.results || []).map(x => String(x.status)),
+    shipping: (shipping.results || []).map(x => String(x.shipping_status)),
+    products: (products.results || []).map(x => String(x.product_title))
+  };
 }
 
 /* РУЧНАЯ СИНХРОНИЗАЦИЯ */
