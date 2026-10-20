@@ -346,6 +346,26 @@ button {
 
   </section>
 
+  <section id="recent-order" class="checkout" hidden>
+    <h2 id="recent-order-title">Заказ создан</h2>
+    <p class="note">
+      Последний заказ доступен здесь 10 минут после оформления,
+      в том числе после обновления страницы. Скопируйте текст
+      и отправьте его магазину в Telegram. Сам заказ остаётся в системе.
+    </p>
+    <textarea id="recent-order-preview" class="order-preview"
+      readonly aria-label="Текст созданного заказа"></textarea>
+    <div class="actions">
+      <button id="recent-order-copy" class="secondary-button" type="button">
+        Скопировать заказ
+      </button>
+      <a class="chat-link" href="https://t.me/okeanhd_5oceans_shop?direct"
+        target="_blank" rel="noopener noreferrer">Открыть чат магазина →</a>
+    </div>
+    <p id="recent-order-status" class="order-status"
+      role="status" aria-live="polite"></p>
+  </section>
+
   <a href="/#catalog" class="continue-link">
     ← Продолжить покупки
   </a>
@@ -361,6 +381,8 @@ button {
 
 const CART_KEY = "five-oceans-cart-v1";
 const CHECKOUT_KEY = "five-oceans-checkout-v1";
+const RECENT_ORDER_KEY = "five-oceans-recent-order-v1";
+const RECENT_ORDER_TTL = 10 * 60 * 1000;
 const TELEGRAM_URL = "https://t.me/okeanhd_5oceans_shop?direct";
 
 const cartContainer = document.getElementById("cart");
@@ -370,6 +392,13 @@ const orderPreview = document.getElementById("order-preview");
 const telegramButton = document.getElementById("telegram-order");
 const copyButton = document.getElementById("copy-order");
 const orderStatus = document.getElementById("order-status");
+
+const recentOrderSection = document.getElementById("recent-order");
+const recentOrderTitle = document.getElementById("recent-order-title");
+const recentOrderPreview = document.getElementById("recent-order-preview");
+const recentOrderStatus = document.getElementById("recent-order-status");
+const recentOrderCopy = document.getElementById("recent-order-copy");
+let recentOrderTimer;
 
 let cart = [];
 let products = [];
@@ -409,8 +438,8 @@ function saveCart() {
   изменились, следующее оформление получит новый ключ.
   Один и тот же ключ защищает от случайных дублей.
 */
-function cartFingerprint() {
-  const normalized = cart.map(item => ({
+function cartFingerprint(items = cart) {
+  const normalized = items.map(item => ({
     slug: String(item.slug || ""),
     size: String(item.size || ""),
     quantity: Number(item.quantity)
@@ -454,6 +483,7 @@ function checkoutKeyFor(fingerprint) {
 
   if (
     stored &&
+    !stored.completed &&
     stored.fingerprint === fingerprint &&
     typeof stored.key === "string"
   ) {
@@ -512,7 +542,67 @@ function composeOrderText(items, number) {
   return lines.join("\n");
 }
 
+function restoreRecentOrder() {
+  clearTimeout(recentOrderTimer);
+  recentOrderSection.hidden = true;
+  recentOrderPreview.value = "";
+  recentOrderStatus.textContent = "";
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECENT_ORDER_KEY) || "null");
+    if (!saved) return;
+    if (!Number.isFinite(saved.expiresAt) || saved.expiresAt <= Date.now()) {
+      localStorage.removeItem(RECENT_ORDER_KEY);
+      return;
+    }
+    if (typeof saved.order_id !== "string" || typeof saved.text !== "string") return;
+
+    recentOrderTitle.textContent = "Заказ № " + saved.order_id + " создан";
+    recentOrderPreview.value = saved.text;
+    recentOrderSection.hidden = false;
+    recentOrderTimer = setTimeout(restoreRecentOrder, saved.expiresAt - Date.now());
+  } catch (error) {
+    console.warn("Не удалось восстановить последний заказ", error);
+  }
+}
+
+function completeCheckout(order) {
+  // Сначала сохраняем подтверждение: ошибка хранилища не должна
+  // лишить клиента номера заказа или защиты от повторной отправки.
+  const saved = {
+    order_id: order.order_id,
+    text: composeOrderText(order.items, order.order_id),
+    expiresAt: Date.now() + RECENT_ORDER_TTL
+  };
+  localStorage.setItem(RECENT_ORDER_KEY, JSON.stringify(saved));
+
+  const storedKey = JSON.parse(localStorage.getItem(CHECKOUT_KEY) || "null");
+  if (storedKey?.key === currentOrder.checkoutKey) {
+    // Завершённый ключ больше не используется для новой покупки.
+    localStorage.setItem(CHECKOUT_KEY, JSON.stringify({
+      ...storedKey, completed: true
+    }));
+  }
+
+  const storedCart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+  // Не стираем товары, изменённые в другой вкладке во время запроса.
+  if (Array.isArray(storedCart) &&
+      cartFingerprint(storedCart) === currentOrder.fingerprint) {
+    localStorage.setItem(CART_KEY, "[]");
+    cart = [];
+  } else {
+    cart = Array.isArray(storedCart) ? storedCart : [];
+  }
+  currentOrder = null;
+  window.dispatchEvent(new Event("five-oceans-cart-updated"));
+  renderCart();
+  restoreRecentOrder();
+}
+
 function updateOrderPreview(hasUnavailable) {
+  cartContainer.querySelectorAll("input, button").forEach(control => {
+    control.disabled = submitting;
+  });
   checkout.hidden = cart.length === 0;
 
   if (!cart.length) {
@@ -792,16 +882,16 @@ async function createOrder() {
     );
   }
 
-  currentOrder = { fingerprint, response: result };
+  currentOrder = { fingerprint, checkoutKey, response: result };
   return result;
 }
 
 /* КОПИРОВАНИЕ УЖЕ ЗАРЕГИСТРИРОВАННОГО ЗАКАЗА */
 
-async function copyRegisteredOrder() {
-  const text = orderPreview.value;
+async function copyRegisteredOrder(preview = orderPreview) {
+  const text = preview.value;
 
-  if (!currentOrder || !text) {
+  if (!text) {
     return false;
   }
 
@@ -815,8 +905,8 @@ async function copyRegisteredOrder() {
   }
 
   try {
-    orderPreview.focus();
-    orderPreview.select();
+    preview.focus();
+    preview.select();
     return document.execCommand("copy");
   } catch {
     return false;
@@ -824,6 +914,23 @@ async function copyRegisteredOrder() {
 }
 
 async function handleCheckout(openTelegram) {
+  if (submitting) return;
+  // Другая вкладка могла уже оформить или изменить эту корзину.
+  try {
+    const stored = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+    const latestCart = Array.isArray(stored) ? stored : [];
+    if (cartFingerprint(latestCart) !== cartFingerprint()) {
+      cart = latestCart;
+      currentOrder = null;
+      renderCart();
+      restoreRecentOrder();
+      orderStatus.textContent = "Корзина обновилась. Проверьте её состав.";
+      return;
+    }
+  } catch {
+    orderStatus.textContent = "Не удалось прочитать корзину. Обновите страницу.";
+    return;
+  }
   if (!canCheckout || submitting) return;
 
   submitting = true;
@@ -834,15 +941,23 @@ async function handleCheckout(openTelegram) {
 
   try {
     const order = await createOrder();
-    updateOrderPreview(false);
+    try {
+      completeCheckout(order);
+    } catch (error) {
+      throw new Error(
+        "Заказ № " + order.order_id + " уже создан, но не удалось " +
+        "сохранить подтверждение в браузере. Повторите нажатие: " +
+        "новый заказ не будет создан."
+      );
+    }
 
-    const copied = await copyRegisteredOrder();
+    const copied = await copyRegisteredOrder(recentOrderPreview);
 
     if (!copied) {
-      orderPreview.focus();
-      orderPreview.select();
+      recentOrderPreview.focus();
+      recentOrderPreview.select();
 
-      orderStatus.textContent =
+      recentOrderStatus.textContent =
         "Заказ № " + order.order_id +
         " создан в системе, но браузер не разрешил " +
         "копирование. Скопируйте выделенный текст " +
@@ -850,7 +965,7 @@ async function handleCheckout(openTelegram) {
       return;
     }
 
-    orderStatus.textContent =
+    recentOrderStatus.textContent =
       "Заказ № " + order.order_id +
       " создан и скопирован. В Telegram вставьте " +
       "сообщение и нажмите «Отправить».";
@@ -877,9 +992,29 @@ telegramButton.addEventListener("click", () => {
   handleCheckout(true);
 });
 
+recentOrderCopy.addEventListener("click", async () => {
+  restoreRecentOrder();
+  if (recentOrderSection.hidden) return;
+  const copied = await copyRegisteredOrder(recentOrderPreview);
+  recentOrderStatus.textContent = copied
+    ? "Заказ скопирован. Вставьте его в Telegram и отправьте магазину."
+    : "Скопируйте выделенный текст вручную и отправьте магазину.";
+});
+
+window.addEventListener("pageshow", restoreRecentOrder);
+window.addEventListener("storage", event => {
+  if (event.key === RECENT_ORDER_KEY || event.key === null) {
+    restoreRecentOrder();
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) restoreRecentOrder();
+});
+
 /* ЗАГРУЗКА */
 
 async function init() {
+  restoreRecentOrder();
   try {
     const saved = JSON.parse(
       localStorage.getItem(CART_KEY) || "[]"
@@ -917,4 +1052,5 @@ init();
 
 </body>
 </html>
+
 
