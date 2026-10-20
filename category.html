@@ -224,7 +224,10 @@ async function loadCategory() {
     }
 
     matching.forEach(product => {
-      const card = element("article", "card");
+      c
+const card = element("a", "card");
+card.href = "/product.html?slug=" +
+  encodeURIComponent(product.slug);
 
       const photo = product.photos?.[0];
 
