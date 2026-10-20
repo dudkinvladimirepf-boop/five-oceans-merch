@@ -358,7 +358,161 @@ function orderStatusLabel(status) {
   return known[status] || String(status || "Неизвестен");
 }
 
-function renderOrders(orders) {
+async function changeOrderStatus(context, form) {
+  const orderId = String(form.get("order_id") || "");
+  const action = String(form.get("action") || "");
+  if (!/^FO-\d{8}-[0-9A-F]{12}$/.test(orderId)) {
+    throw new Error("Некорректный номер заказа.");
+  }
+  if (!["order-reserve", "order-paid", "order-cancel"].includes(action)) {
+    throw new Error("Неизвестное действие с заказом.");
+  }
+
+  const db = database(context.env);
+  const existing = await db.prepare(
+    "SELECT status FROM orders WHERE order_id = ? LIMIT 1"
+  ).bind(orderId).first();
+
+  if (!existing) {
+    throw new Error("Заказ не найден.");
+  }
+  const from = existing.status;
+  if (!["pending", "reserved"].includes(from)) {
+    throw new Error(
+      "Этот заказ уже завершён или отменён. Изменять его нельзя."
+    );
+  }
+  if (action === "order-reserve" && from !== "pending") {
+    throw new Error("Заказ уже в резерве.");
+  }
+
+  const to = action === "order-reserve"
+    ? "reserved"
+    : action === "order-paid"
+      ? "sold"
+      : "cancelled";
+
+  const changesStock = action !== "order-cancel" || from === "reserved";
+  const needsAvailable = action === "order-reserve" ||
+    (action === "order-paid" && from === "pending");
+
+  const stockCheck = needsAvailable
+    ? "i.total_quantity - i.reserved_quantity < oi.quantity"
+    : "i.reserved_quantity < oi.quantity OR i.total_quantity < oi.quantity";
+
+  /*
+    The conditional status UPDATE is a transactional guard:
+    - it checks the prior status and all order lines;
+    - if a required stock line is missing / insufficient,
+      its CASE chooses an INVALID status rejected by orders.status CHECK.
+    This aborts the D1 batch, leaving the order and inventory unchanged.
+    Stock updates in the same batch therefore cannot be partial.
+  */
+  const requirements = changesStock
+    ? `EXISTS (
+          SELECT 1 FROM order_items AS oi
+          WHERE oi.order_id = orders.order_id
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM order_items AS oi
+         LEFT JOIN inventory AS i
+           ON i.product_slug = oi.product_slug
+          AND i.size = oi.size
+         WHERE oi.order_id = orders.order_id
+           AND (i.product_slug IS NULL OR ${stockCheck})
+       )`
+    : "1 = 1";
+
+  const updateOrder = db.prepare(
+    `UPDATE orders
+     SET status = CASE
+       WHEN status = ? AND (${requirements})
+         THEN ?
+       ELSE '__invalid_status__'
+     END,
+     updated_at = CURRENT_TIMESTAMP
+     WHERE order_id = ?`
+  ).bind(from, to, orderId);
+
+  const statements = [updateOrder];
+
+  if (changesStock) {
+    const qty = `(SELECT oi.quantity FROM order_items AS oi
+       WHERE oi.order_id = ?
+         AND oi.product_slug = inventory.product_slug
+         AND oi.size = inventory.size)`;
+
+    let changeFields;
+    let qtyBindings;
+
+    if (action === "order-reserve") {
+      changeFields = `reserved_quantity = reserved_quantity + ${qty}`;
+      qtyBindings = [orderId];
+    } else if (action === "order-paid" && from === "pending") {
+      changeFields = `total_quantity = total_quantity - ${qty}`;
+      qtyBindings = [orderId];
+    } else if (action === "order-paid" && from === "reserved") {
+      changeFields =
+        `total_quantity = total_quantity - ${qty},
+         reserved_quantity = reserved_quantity - ${qty}`;
+      qtyBindings = [orderId, orderId];
+    } else {
+      changeFields = `reserved_quantity = reserved_quantity - ${qty}`;
+      qtyBindings = [orderId];
+    }
+
+    statements.push(db.prepare(
+      `UPDATE inventory
+       SET ${changeFields},
+           updated_at = CURRENT_TIMESTAMP
+       WHERE EXISTS (
+         SELECT 1 FROM order_items AS oi
+         WHERE oi.order_id = ?
+           AND oi.product_slug = inventory.product_slug
+           AND oi.size = inventory.size
+       )`
+    ).bind(...qtyBindings, orderId));
+  }
+
+  try {
+    const results = await db.batch(statements);
+
+    if (results[0]?.meta?.changes !== 1) {
+      throw new Error("Не удалось изменить статус заказа.");
+    }
+  } catch (error) {
+    console.error("Order transition rejected", error);
+    throw new Error(
+      "Не удалось выполнить действие: статус заказа или остатки " +
+      "изменились, либо товара недостаточно на складе. " +
+      "Обновите страницу и проверьте заказ."
+    );
+  }
+
+  const label = to === "reserved"
+    ? "В резерве"
+    : to === "sold"
+      ? "Оплачен"
+      : "Отменён";
+
+  return "Заказ " + orderId + ": " + label + ".";
+}
+
+function renderOrderButton(order, csrf, action, label, colorClass) {
+  return `
+    <form method="POST" action="/developers#orders">
+      ${hidden("action", action)}
+      ${hidden("csrf", csrf)}
+      ${hidden("order_id", order.order_id)}
+      <button type="submit" class="${colorClass}">
+        ${esc(label)}
+      </button>
+    </form>
+  `;
+}
+
+function renderOrders(orders, csrf) {
   if (!orders.length) {
     return '<p class="muted">Оформленных заказов пока нет.</p>';
   }
@@ -396,7 +550,13 @@ function renderOrders(orders) {
         <div class="order-body">
           <p class="muted">
             Позиции и цены сохранены при оформлении.
-            Заказ не резервирует товары до действия администратора.
+            ${status === "pending"
+              ? "Заказ ещё не обработан, товары не зарезервированы."
+              : status === "reserved"
+                ? "Товары зарезервированы; доступное количество уменьшено."
+                : status === "sold"
+                  ? "Оплата отмечена; товары списаны со склада."
+                  : "Заказ закрыт, активного резерва нет."}
           </p>
           <div class="table-wrap">
             <table class="orders-table">
@@ -414,6 +574,21 @@ function renderOrders(orders) {
             <span>${number(order.items.length)} позиций</span>
             <strong>Итого: ${moneyRub(order.total)}</strong>
           </div>
+          ${status === "pending" || status === "reserved" ? `
+            <div class="order-actions">
+              ${status === "pending"
+                ? renderOrderButton(order, csrf, "order-reserve", "В резерв", "blue-button")
+                : ""}
+              ${renderOrderButton(order, csrf, "order-paid", "Оплачено", "paid-button")}
+              ${renderOrderButton(order, csrf, "order-cancel", "Отменить", "cancel-button")}
+            </div>
+            <p class="order-help">
+              ${status === "pending"
+                ? "В резерв — блокирует количество. Оплачено — сразу списывает со склада."
+                : "Оплачено — списывает товар и снимает резерв. Отменить — освобождает резерв."}
+            </p>
+          ` : ""}
+
         </div>
       </details>
     `;
@@ -1178,7 +1353,7 @@ async function dashboard(context, secret, options = {}) {
         чтобы увидеть состав, размеры и сумму.
         Резервирование, оплата и отмена — следующий этап.
       </p>
-      ${renderOrders(orders)}
+      ${renderOrders(orders, csrf)}
     </section>
 
     <form method="POST" action="/developers">
@@ -1430,6 +1605,15 @@ td small {
 .status-sold { background: #eaf7ee; color: #28734a; }
 .status-cancelled, .status-expired { background: #fff0f0; color: #a03b3b; }
 .status-unknown { background: #edf1f5; color: #506574; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 19px; padding-top: 17px; border-top: 1px solid #dce5eb; }
+.order-actions form { margin: 0; }
+.order-actions button { padding: 11px 15px; border-radius: 8px; font-size: 14px; }
+.paid-button { background: #28734a; border: 0; color: white; }
+.paid-button:hover { background: #1b5937; }
+.cancel-button { background: #fff3f3; border: 1px solid #efb8b8; color: #ad3636; }
+.cancel-button:hover { background: #ffe4e4; }
+.order-help { color: #71808e; font-size: 12px; line-height: 1.5; margin: 10px 0 0; }
+
 @media (max-width: 650px) {
   main { margin: 20px auto; padding: 12px; }
   .card { padding: 18px; }
@@ -1579,6 +1763,12 @@ export async function onRequestPost(context) {
 
   try {
     switch (action) {
+      case "order-reserve":
+      case "order-paid":
+      case "order-cancel":
+        message = await changeOrderStatus(context, form);
+        break;
+
       case "sync":
         report = await syncCatalog(context);
         break;
