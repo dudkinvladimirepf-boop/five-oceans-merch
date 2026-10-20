@@ -373,7 +373,113 @@ async function loadCategories() {
   }
 }
 
+
+async function loadFeaturedProducts() {
+  try {
+    const [productsResponse, categoriesResponse] =
+      await Promise.all([
+        fetch("/data/products.json", { cache: "no-store" }),
+        fetch("/data/categories.json", { cache: "no-store" })
+      ]);
+
+    if (!productsResponse.ok || !categoriesResponse.ok) {
+      throw new Error("Ошибка загрузки товаров");
+    }
+
+    const products = await productsResponse.json();
+    const categories = await categoriesResponse.json();
+
+    const featured = products.filter(product =>
+      product.featured === true &&
+      product.available === true
+    );
+
+    if (!featured.length) return;
+
+    const section = makeElement("section");
+    section.id = "featured";
+    section.style.marginTop = "65px";
+
+    const title = makeElement(
+      "h2", "section-title", "Наш выбор"
+    );
+
+    const subtitle = makeElement(
+      "p", "section-description",
+      "Товары, которые мы особенно рекомендуем"
+    );
+
+    const grid = makeElement("div", "categories");
+
+    featured.forEach(product => {
+      const category = categories.find(c =>
+        String(c.id).trim().toLowerCase() ===
+        String(product.category).trim().toLowerCase()
+      );
+
+      const card = makeElement("a", "category");
+
+      card.href = category
+        ? "/category.html?slug=" +
+          encodeURIComponent(category.slug)
+        : "#catalog";
+
+      const cover = makeElement("div", "category-cover");
+
+      if (product.photos && product.photos.length) {
+        const img = document.createElement("img");
+        img.src = product.photos[0];
+        img.alt = product.title;
+        img.loading = "lazy";
+        cover.appendChild(img);
+      } else {
+        cover.appendChild(
+          makeElement("div", "fallback", "5 ОКЕАНОВ")
+        );
+      }
+
+      const info = makeElement("div", "category-info");
+
+      info.appendChild(
+        makeElement("h3", "", product.title)
+      );
+
+      if (product.price != null) {
+        const price = new Intl.NumberFormat("ru-RU", {
+          style: "currency",
+          currency: "RUB",
+          maximumFractionDigits: 0
+        }).format(product.price);
+
+        const priceElement = makeElement("h3", "", price);
+        info.appendChild(priceElement);
+      }
+
+      info.appendChild(
+        makeElement(
+          "div", "open-category", "Смотреть товар →"
+        )
+      );
+
+      card.append(cover, info);
+      grid.appendChild(card);
+    });
+
+    section.append(title, subtitle, grid);
+
+    const main = document.querySelector("main");
+    const about = main.querySelector(".about");
+
+    main.insertBefore(section, about);
+
+  } catch (error) {
+    console.error("Ошибка блока Наш выбор:", error);
+  }
+}
+
 loadCategories();
+loadFeaturedProducts();
+
 </script>
 
 </body>
