@@ -513,9 +513,9 @@ async function changeOrderStatus(context, form) {
   return "Заказ " + orderId + ": " + label + ".";
 }
 
-function renderOrderButton(order, csrf, action, label, colorClass) {
+function renderOrderButton(order, csrf, action, label, colorClass, formAction = "/developers") {
   return `
-    <form method="POST" action="/developers#orders">
+    <form method="POST" action="${esc(formAction)}#orders">
       ${hidden("action", action)}
       ${hidden("csrf", csrf)}
       ${hidden("order_id", order.order_id)}
@@ -584,14 +584,14 @@ async function changeShippingStatus(context, form) {
   );
 }
 
-function renderShippingButton(order, csrf, current) {
+function renderShippingButton(order, csrf, current, formAction = "/developers") {
   const target = current === "shipped" ? "not_shipped" : "shipped";
   const label = target === "shipped"
     ? "Отметить отправленным"
     : "Вернуть в «Не отправлено»";
 
   return `
-    <form method="POST" action="/developers#orders">
+    <form method="POST" action="${esc(formAction)}#orders">
       ${hidden("action", "order-shipping")}
       ${hidden("csrf", csrf)}
       ${hidden("order_id", order.order_id)}
@@ -604,7 +604,7 @@ function renderShippingButton(order, csrf, current) {
   `;
 }
 
-function renderOrders(orders, csrf) {
+function renderOrders(orders, csrf, formAction = "/developers") {
   if (!orders.length) {
     return '<p class="muted">Оформленных заказов пока нет.</p>';
   }
@@ -675,10 +675,10 @@ function renderOrders(orders, csrf) {
           ${status === "pending" || status === "reserved" ? `
             <div class="order-actions">
               ${status === "pending"
-                ? renderOrderButton(order, csrf, "order-reserve", "В резерв", "blue-button")
+                ? renderOrderButton(order, csrf, "order-reserve", "В резерв", "blue-button", formAction)
                 : ""}
-              ${renderOrderButton(order, csrf, "order-paid", "Оплачено", "paid-button")}
-              ${renderOrderButton(order, csrf, "order-cancel", "Отменить", "cancel-button")}
+              ${renderOrderButton(order, csrf, "order-paid", "Оплачено", "paid-button", formAction)}
+              ${renderOrderButton(order, csrf, "order-cancel", "Отменить", "cancel-button", formAction)}
             </div>
             <p class="order-help">
               ${status === "pending"
@@ -688,7 +688,7 @@ function renderOrders(orders, csrf) {
           ` : ""}
           <div class="shipping-actions">
             <span class="shipping-label">Отправка</span>
-            ${renderShippingButton(order, csrf, shippingStatus)}
+            ${renderShippingButton(order, csrf, shippingStatus, formAction)}
           </div>
 
         </div>
@@ -1346,7 +1346,7 @@ function getProductTitle(item, names) {
     || item.product_slug;
 }
 
-function renderInventory(rows, products, csrf) {
+function renderInventory(rows, products, csrf, formAction = "/developers") {
   if (!rows.length) {
     return `<p class="muted">Склад пока пуст.</p>`;
   }
@@ -1375,7 +1375,7 @@ function renderInventory(rows, products, csrf) {
         </td>
 
         <td>
-          <form method="POST" action="/developers"
+          <form method="POST" action="${esc(formAction)}"
                 class="inline-form">
             ${hidden("action", "stock-save")}
             ${hidden("csrf", csrf)}
@@ -1398,7 +1398,7 @@ function renderInventory(rows, products, csrf) {
         </td>
 
         <td>
-          <form method="POST" action="/developers">
+          <form method="POST" action="${esc(formAction)}">
             ${hidden("action", "stock-delete-request")}
             ${hidden("csrf", csrf)}
             ${hidden("product_slug", slug)}
@@ -1432,7 +1432,7 @@ function renderInventory(rows, products, csrf) {
   `;
 }
 
-function renderExcluded(rows, products, csrf) {
+function renderExcluded(rows, products, csrf, formAction = "/developers") {
   if (!rows.length) return "";
 
   const names = productNames(products);
@@ -1445,7 +1445,7 @@ function renderExcluded(rows, products, csrf) {
       </td>
       <td>${esc(item.size || "Без размера")}</td>
       <td>
-        <form method="POST" action="/developers">
+        <form method="POST" action="${esc(formAction)}">
           ${hidden("action", "stock-restore")}
           ${hidden("csrf", csrf)}
           ${hidden("product_slug", item.product_slug)}
@@ -1512,6 +1512,10 @@ async function dashboard(context, secret, options = {}) {
   let excluded = [];
   let products = [];
   let orders = [];
+  let orderChoices = { statuses: [], shipping: [], products: [] };
+  const filters = readDashboardFilters(context.request);
+  const query = filteredQuery(filters);
+  const formAction = "/developers" + (query ? "?" + query : "");
   const problems = [];
 
   try {
@@ -1532,7 +1536,8 @@ async function dashboard(context, secret, options = {}) {
   }
 
   try {
-    orders = await recentOrders(context.env);
+    orders = await recentOrders(context.env, filters);
+    orderChoices = await orderFilterOptions(context.env);
   } catch (error) {
     console.error(error);
     problems.push("Не удалось загрузить список заказов.");
@@ -1586,8 +1591,18 @@ async function dashboard(context, secret, options = {}) {
 
     ${renderReport(options.report)}
 
-    <section class="section">
+    <section class="section" id="stock">
       <h3>Складские остатки</h3>
+      <p class="muted">
+        Фильтры обновляются из текущего склада и каталога товаров.
+        Названия и размеры появятся автоматически после синхронизации.
+      </p>
+      ${renderStockFilters(stock, products, filters)}
+      <p class="muted">
+        Найдено позиций: ${number(filterStockRows(stock, products, filters).length)}.
+        Показатели «На складе / В резерве / Доступно» выше — общие,
+        без учёта фильтра.
+      </p>
 
       <div class="sync-area">
         <p class="muted">
@@ -1595,7 +1610,7 @@ async function dashboard(context, secret, options = {}) {
           Удалённые позиции не создаются повторно.
         </p>
 
-        <form method="POST" action="/developers">
+        <form method="POST" action="${esc(formAction)}#stock">
           ${hidden("action", "sync")}
           ${hidden("csrf", csrf)}
 
@@ -1605,7 +1620,7 @@ async function dashboard(context, secret, options = {}) {
         </form>
       </div>
 
-      ${renderInventory(stock, products, csrf)}
+      ${renderInventory(filterStockRows(stock, products, filters), products, csrf, formAction)}
 
       <p class="muted">
         Удаление требует подтверждения.
@@ -1614,7 +1629,7 @@ async function dashboard(context, secret, options = {}) {
       </p>
     </section>
 
-    ${renderExcluded(excluded, products, csrf)}
+    ${renderExcluded(excluded, products, csrf, formAction)}
 
     <section class="section" id="orders">
       <div class="order-header">
@@ -1622,11 +1637,13 @@ async function dashboard(context, secret, options = {}) {
         <a class="order-refresh" href="/developers#orders">↻ Обновить</a>
       </div>
       <p class="muted">
-        Последние 100 заказов. Нажми на номер,
-        чтобы увидеть состав, размеры и сумму.
-        Резервирование, оплата и отмена — следующий этап.
+        Поиск и фильтры работают по всей базе заказов.
+        Показаны до 100 последних совпадений.
+        Список статусов и товаров составляется из D1 автоматически.
       </p>
-      ${renderOrders(orders, csrf)}
+      ${renderOrderFilters(orderChoices, filters)}
+      <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
+      ${renderOrders(orders, csrf, formAction)}
     </section>
 
     <form method="POST" action="/developers">
@@ -1861,6 +1878,49 @@ td small {
   border: 1px solid #cbd5df;
   border-radius: 9px;
   padding: 14px;
+}
+.filters-form {
+  background: #f7fafc;
+  border: 1px solid #dce5eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.filters-grid {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.filter-field { flex: 1 1 160px; min-width: 145px; }
+.filter-field label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #506574;
+}
+.filter-field select, .filter-field input[type="search"] {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 9px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  background: #fff;
+  color: #14283a;
+  font: inherit;
+  font-size: 14px;
+}
+.filter-controls {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 1px;
+}
+.filter-reset {
+  color: #146789;
+  text-decoration: none;
+  font-size: 13px;
 }
 .order-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
 .order-refresh { color: #146789; text-decoration: none; font-size: 14px; }
