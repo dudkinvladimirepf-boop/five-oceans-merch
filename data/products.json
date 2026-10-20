@@ -24,5 +24,16 @@
     "available": true,
     "featured": true,
     "new_arrival": true
+  },
+  {
+    "product_id": "c4e95dbe-0aa1-4d29-8378-11744bebe889",
+    "title": "хз что",
+    "slug": "xz_chto",
+    "description": "рапрапр",
+    "price": 200,
+    "category": "головные-уборы",
+    "available": true,
+    "featured": false,
+    "new_arrival": false
   }
 ]
