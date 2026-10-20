@@ -16,6 +16,12 @@ content:
         label: Название товара
         type: string
         required: true
+      
+      - name: slug
+        label: Адрес товара
+        type: string
+        description: Уникальное название латиницей, без пробелов
+
       - name: description
         label: Описание
         type: text
