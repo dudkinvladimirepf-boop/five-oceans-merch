@@ -193,6 +193,18 @@ footer {
   .section-title { font-size: 27px; }
   .about { padding: 25px; }
 }
+/* Компактные карточки раздела Наш выбор */
+#featured .categories {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(200px, 240px)
+  );
+}
+
+#featured .category-cover img {
+  object-fit: contain;
+}
+
 </style>
 </head>
 
