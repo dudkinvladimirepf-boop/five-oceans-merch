@@ -1,27 +1,11 @@
 [
   {
+    "product_id": "a6f96faa-ae5c-46bb-b614-db11c9d36eb6",
     "title": "Футболка Конюхов",
     "slug": "futbolka-konyukhov",
-    "description": "футболка с надписью и тд",
-    "price": 2800,
+    "description": "бла бла бла",
+    "price": 8000,
     "category": "футболки",
-    "photos": [
-      "/media/logo5oceanscoloreng.jpg"
-    ],
-    "sizes": [
-      "52-54",
-      "L"
-    ],
-    "available": true,
-    "featured": true,
-    "new_arrival": true
-  },
-  {
-    "title": "Брелок субмарина",
-    "slug": "brelok_submarine",
-    "description": "брелок с изображением батискафа кусто",
-    "price": 500,
-    "category": "аксессуары",
     "available": true,
     "featured": true,
     "new_arrival": true
