@@ -38,6 +38,12 @@ content:
       - name: available
         label: В наличии
         type: boolean
+        - name: featured
+        label: Наш выбор
+        type: boolean
+      - name: new_arrival
+        label: Новинка
+        type: boolean
 
   - name: categories
     label: Категории
