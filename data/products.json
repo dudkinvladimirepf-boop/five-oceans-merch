@@ -6,6 +6,10 @@
     "description": "бла бла бла",
     "price": 8000,
     "category": "футболки",
+    "sizes": [
+      "52-54",
+      "L"
+    ],
     "available": true,
     "featured": true,
     "new_arrival": true
