@@ -9,5 +9,16 @@
     "available": true,
     "featured": true,
     "new_arrival": true
+  },
+  {
+    "product_id": "9766eb52-4691-4785-ad3f-1b2926aa6552",
+    "title": "Брелок субмарина",
+    "slug": "brelok_submarine",
+    "description": "ахахахаах",
+    "price": 9000,
+    "category": "аксессуары",
+    "available": true,
+    "featured": true,
+    "new_arrival": true
   }
 ]
