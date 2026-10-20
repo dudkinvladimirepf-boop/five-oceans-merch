@@ -3,181 +3,378 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Мерч Клуба «5 океанов»</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #f5f7fa;
-      color: #14283a;
-      font-family: Arial, sans-serif;
-    }
-    header {
-      background: #102c43;
-      color: white;
-      padding: 52px 20px;
-      text-align: center;
-    }
-    header h1 { font-size: 38px; margin: 10px 0; }
-    header p { color: #c2d9e6; }
-    main { max-width: 1150px; margin: 40px auto; padding: 0 20px; }
-    .products {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
-      gap: 24px;
-    }
-    .card {
-      overflow: hidden;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px #102c4310;
-    }
-    .card img {
-      display: block;
-      width: 100%;
-      aspect-ratio: 1;
-      object-fit: contain;
-      background: #edf1f5;
-    }
-    .info { padding: 20px; }
-    .info h3 { margin: 0 0 10px; }
-    .description { color: #617383; line-height: 1.5; }
-    .price { font-size: 23px; font-weight: bold; }
-    .sizes { display: flex; gap: 8px; flex-wrap: wrap; }
-    .size {
-      padding: 9px 13px;
-      border: 1px solid #cbd5df;
-      border-radius: 8px;
-      background: white;
-      color: #14283a;
-      cursor: pointer;
-    }
-    .size.selected {
-      background: #102c43;
-      color: white;
-    }
-    .status { font-size: 13px; color: #28734a; }
-    .unavailable { color: #a03b3b; }
-    footer {
-      padding: 40px 20px;
-      text-align: center;
-      color: #71808e;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мерч Клуба «5 океанов»</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #f5f7fa;
+  color: #14283a;
+  font-family: Arial, sans-serif;
+}
+
+a { color: inherit; text-decoration: none; }
+
+header {
+  background: #102c43;
+  color: white;
+  padding: 22px 6%;
+}
+
+nav {
+  max-width: 1150px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.menu {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+}
+
+.hero {
+  padding: 95px 20px;
+  color: white;
+  text-align: center;
+  background:
+    linear-gradient(135deg, #102c43, #146789);
+}
+
+.hero h1 {
+  font-size: clamp(34px, 6vw, 64px);
+  max-width: 850px;
+  margin: 0 auto 25px;
+  line-height: 1.15;
+}
+
+.hero p {
+  color: #d0e3ec;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.hero-button {
+  display: inline-block;
+  background: white;
+  color: #102c43;
+  padding: 15px 28px;
+  margin-top: 20px;
+  border-radius: 9px;
+  font-weight: bold;
+}
+
+main {
+  max-width: 1150px;
+  margin: auto;
+  padding: 60px 20px;
+}
+
+.section-title {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.section-description {
+  color: #71808e;
+  margin-bottom: 35px;
+}
+
+.categories {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(250px, 1fr));
+  gap: 25px;
+}
+
+.category {
+  display: block;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px #102c4310;
+  transition: transform .2s, box-shadow .2s;
+}
+
+.category:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 28px #102c4320;
+}
+
+.category-cover {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, #d6e8f0, #5e9db5);
+  overflow: hidden;
+}
+
+.category-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 23px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.category-info { padding: 24px; }
+
+.category-info h3 {
+  margin: 0 0 12px;
+  font-size: 23px;
+}
+
+.category-info p {
+  margin: 0 0 18px;
+  color: #71808e;
+  line-height: 1.5;
+}
+
+.count {
+  font-size: 13px;
+  color: #71808e;
+}
+
+.open-category {
+  margin-top: 15px;
+  color: #146789;
+  font-weight: bold;
+}
+
+.about {
+  margin-top: 65px;
+  padding: 45px;
+  background: #e8f0f5;
+  border-radius: 18px;
+}
+
+.about h2 { margin-top: 0; }
+
+.about p {
+  line-height: 1.8;
+  color: #526778;
+}
+
+footer {
+  background: #102c43;
+  color: #b5cfdd;
+  padding: 35px 20px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  header { padding: 18px; }
+  .brand { font-size: 17px; }
+  .menu { gap: 12px; }
+  .hero { padding: 65px 20px; }
+  .hero p { font-size: 16px; }
+  main { padding: 35px 18px; }
+  .section-title { font-size: 27px; }
+  .about { padding: 25px; }
+}
+</style>
 </head>
+
 <body>
-  <header>
-    <p>КЛУБ «5 ОКЕАНОВ»</p>
-    <h1>Мерч для тех, кто любит океан</h1>
-    <p>Вещи, вдохновлённые морем и экспедициями</p>
-  </header>
 
-  <main>
-    <h2>Наши товары</h2>
-    <div id="products" class="products">
-      Загружаем каталог...
+<header>
+  <nav>
+    <a class="brand" href="/">5 ОКЕАНОВ</a>
+    <div class="menu">
+      <a href="/">Главная</a>
+      <a href="#catalog">Каталог</a>
     </div>
-  </main>
+  </nav>
+</header>
 
-  <footer>Клуб «5 океанов»</footer>
+<section class="hero">
+  <h1>Мерч для тех, кто любит океан</h1>
+  <p>
+    Одежда и аксессуары, вдохновлённые
+    морскими путешествиями и экспедициями
+    Клуба «5 океанов».
+  </p>
+  <a class="hero-button" href="#catalog">
+    Смотреть коллекцию
+  </a>
+</section>
 
-  <script>
-    const container = document.getElementById("products");
+<main>
 
-    async function loadProducts() {
-      try {
-        const response = await fetch("/data/products.json", {
-          cache: "no-store"
-        });
-        if (!response.ok) throw new Error("Ошибка загрузки");
+  <section id="catalog">
+    <h2 class="section-title">Наши коллекции</h2>
+    <p class="section-description">
+      Выберите категорию товаров
+    </p>
 
-        const products = await response.json();
-        container.replaceChildren();
+    <div id="categories" class="categories">
+      Загружаем категории...
+    </div>
+  </section>
 
-        if (!products.length) {
-          container.textContent = "Товары скоро появятся.";
-          return;
-        }
+  <section class="about">
+    <h2>Клуб «5 океанов»</h2>
+    <p>
+      Мы исследуем океаны, путешествуем под
+      парусом и делимся любовью к морю.
 
-        products.forEach(product => {
-          const card = document.createElement("article");
-          card.className = "card";
+      Наш мерч — небольшая часть большого
+      экспедиционного приключения.
+    </p>
+  </section>
 
-          const photo = product.photos?.[0];
-          if (photo) {
-            const img = document.createElement("img");
-            img.src = photo;
-            img.alt = product.title || "Товар";
-            img.loading = "lazy";
-            card.appendChild(img);
-          }
+</main>
 
-          const info = document.createElement("div");
-          info.className = "info";
+<footer>
+  Клуб «5 океанов»
+</footer>
 
-          const title = document.createElement("h3");
-          title.textContent = product.title;
-          info.appendChild(title);
+<script>
+const container = document.getElementById("categories");
 
-          const description = document.createElement("p");
-          description.className = "description";
-          description.textContent = product.description || "";
-          info.appendChild(description);
+function getProductCount(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
 
-          const price = document.createElement("p");
-          price.className = "price";
-          price.textContent = new Intl.NumberFormat("ru-RU", {
-            style: "currency",
-            currency: "RUB",
-            maximumFractionDigits: 0
-          }).format(product.price || 0);
-          info.appendChild(price);
+  if (mod100 >= 11 && mod100 <= 14)
+    return `${n} товаров`;
 
-          const status = document.createElement("p");
-          status.className = product.available
-            ? "status" : "status unavailable";
-          status.textContent = product.available
-            ? "В наличии" : "Нет в наличии";
-          info.appendChild(status);
+  if (mod10 === 1)
+    return `${n} товар`;
 
-          if (product.available && product.sizes?.length) {
-            const label = document.createElement("p");
-            label.textContent = "Выберите размер:";
-            info.appendChild(label);
+  if (mod10 >= 2 && mod10 <= 4)
+    return `${n} товара`;
 
-            const sizes = document.createElement("div");
-            sizes.className = "sizes";
+  return `${n} товаров`;
+}
 
-            product.sizes.forEach(size => {
-              const button = document.createElement("button");
-              button.className = "size";
-              button.type = "button";
-              button.textContent = size;
-              button.onclick = () => {
-                sizes.querySelectorAll(".size").forEach(b =>
-                  b.classList.remove("selected")
-                );
-                button.classList.add("selected");
-              };
-              sizes.appendChild(button);
-            });
+function makeElement(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
 
-            info.appendChild(sizes);
-          }
+async function loadCategories() {
+  try {
+    const responses = await Promise.all([
+      fetch("/data/categories.json", {cache: "no-store"}),
+      fetch("/data/products.json", {cache: "no-store"})
+    ]);
 
-          card.appendChild(info);
-          container.appendChild(card);
-        });
-      } catch (error) {
-        container.textContent =
-          "Не удалось загрузить каталог товаров.";
-        console.error(error);
-      }
+    if (responses.some(r => !r.ok)) {
+      throw new Error("Ошибка загрузки");
     }
 
-    loadProducts();
-  </script>
+    const [categories, products] = await Promise.all(
+      responses.map(r => r.json())
+    );
+
+    container.replaceChildren();
+
+    if (!categories.length) {
+      container.textContent =
+        "Категории скоро появятся.";
+      return;
+    }
+
+    const normalize = s =>
+      String(s || "").trim().toLowerCase();
+
+    categories.forEach(category => {
+      const matching = products.filter(p =>
+        normalize(p.category) === normalize(category.id)
+      );
+
+      const link = document.createElement("a");
+      link.className = "category";
+      link.href = "/category.html?slug=" +
+        encodeURIComponent(category.slug);
+
+      const cover = makeElement("div", "category-cover");
+
+      const examplePhoto = matching.find(p =>
+        p.photos && p.photos.length
+      )?.photos?.[0];
+
+      const photo = category.image || examplePhoto;
+
+      if (photo) {
+        const img = document.createElement("img");
+        img.src = photo;
+        img.alt = category.title;
+        img.loading = "lazy";
+        cover.appendChild(img);
+      } else {
+        cover.appendChild(
+          makeElement("div", "fallback", "5 ОКЕАНОВ")
+        );
+      }
+
+      const info = makeElement("div", "category-info");
+
+      info.appendChild(
+        makeElement("h3", "", category.title)
+      );
+
+      if (category.description) {
+        info.appendChild(
+          makeElement("p", "", category.description)
+        );
+      }
+
+      info.appendChild(
+        makeElement(
+          "div",
+          "count",
+          matching.length
+            ? getProductCount(matching.length)
+            : "Пока нет товаров"
+        )
+      );
+
+      info.appendChild(
+        makeElement(
+          "div",
+          "open-category",
+          "Смотреть товары →"
+        )
+      );
+
+      link.append(cover, info);
+      container.appendChild(link);
+    });
+
+  } catch(error) {
+    container.textContent =
+      "Не удалось загрузить категории.";
+    console.error(error);
+  }
+}
+
+loadCategories();
+</script>
+
 </body>
 </html>
