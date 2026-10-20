@@ -3,18 +3,24 @@
   Клуб «5 океанов»
   Закрытый раздел «Для разработчиков»
 
-  Адрес: /developers
+  Адрес:
+  https://five-oceans-merch.pages.dev/developers
 
-  ADMIN_PASSWORD хранится исключительно
-  в Cloudflare Variables and Secrets.
+  Пароль хранится в Cloudflare:
+  ADMIN_PASSWORD
+
+  Сессия действует 8 часов.
 */
 
 const COOKIE_NAME = "__Host-fo-admin";
 const SESSION_HOURS = 8;
+const SESSION_SECONDS = SESSION_HOURS * 3600;
 
 const encoder = new TextEncoder();
 
-/* ОТВЕТ HTML */
+/* =========================================
+   ОБЩИЕ HTTP-ФУНКЦИИ
+========================================= */
 
 function htmlResponse(body, status = 200) {
   return new Response(body, {
@@ -36,11 +42,24 @@ function htmlResponse(body, status = 200) {
   });
 }
 
-/* СТРАНИЦА ВХОДА И АДМИНИСТРАТОРА */
+function redirectWithCookie(cookie) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      "Location": "/developers",
+      "Set-Cookie": cookie,
+      "Cache-Control": "no-store"
+    }
+  });
+}
+
+/* =========================================
+   HTML СТРАНИЦЫ
+========================================= */
 
 function renderPage(loggedIn, error = "") {
 
-  const form = loggedIn
+  const pageContent = loggedIn
     ? `
       <div class="success">
         ✓ Вход выполнен
@@ -52,9 +71,11 @@ function renderPage(loggedIn, error = "") {
         <div class="panel-title">
           Склад
         </div>
+
         <p>
-          Здесь появятся остатки товаров,
-          размеры и резервы.
+          Здесь появятся складские остатки,
+          размеры товаров, поступления
+          и резервы.
         </p>
       </div>
 
@@ -62,28 +83,36 @@ function renderPage(loggedIn, error = "") {
         <div class="panel-title">
           Заказы
         </div>
+
         <p>
-          Здесь появятся заявки, кнопки
+          Здесь появятся заявки покупателей,
+          а также действия:
           «В резерв», «Оплачено»
           и «Отменить».
         </p>
       </div>
 
       <form method="POST" action="/developers">
+
         <input
           type="hidden"
           name="action"
           value="logout"
         >
 
-        <button class="logout" type="submit">
+        <button
+          class="logout"
+          type="submit"
+        >
           Выйти
         </button>
+
       </form>
     `
     : `
       <p class="description">
-        Закрытый раздел управления магазином
+        Закрытый раздел управления
+        магазином Клуба «5 океанов».
       </p>
 
       ${
@@ -109,10 +138,14 @@ function renderPage(loggedIn, error = "") {
           name="password"
           type="password"
           autocomplete="current-password"
+          maxlength="256"
           required
         >
 
-        <button class="login" type="submit">
+        <button
+          class="login"
+          type="submit"
+        >
           Войти
         </button>
 
@@ -122,17 +155,25 @@ function renderPage(loggedIn, error = "") {
   return `
 <!DOCTYPE html>
 <html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1">
 
-<meta name="robots"
-      content="noindex, nofollow">
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1"
+>
+
+<meta
+  name="robots"
+  content="noindex, nofollow"
+>
 
 <title>Для разработчиков — 5 океанов</title>
 
 <style>
+
 * {
   box-sizing: border-box;
 }
@@ -143,6 +184,8 @@ body {
   color: #14283a;
   font-family: Arial, sans-serif;
 }
+
+/* ШАПКА */
 
 header {
   background: #102c43;
@@ -157,16 +200,18 @@ header a {
   font-weight: bold;
 }
 
+/* ОСНОВНАЯ СТРАНИЦА */
+
 main {
-  max-width: 540px;
+  max-width: 560px;
   margin: 70px auto;
   padding: 25px;
 }
 
 .card {
-  padding: 35px;
   background: white;
   border-radius: 16px;
+  padding: 35px;
   box-shadow: 0 5px 25px #102c4312;
 }
 
@@ -181,10 +226,12 @@ h2 {
 }
 
 .description {
+  margin-bottom: 30px;
   color: #71808e;
   line-height: 1.6;
-  margin-bottom: 30px;
 }
+
+/* ФОРМА ВХОДА */
 
 label {
   display: block;
@@ -232,26 +279,35 @@ button {
   color: #102c43;
 }
 
+.logout:hover {
+  background: #e8f0f5;
+}
+
+/* СООБЩЕНИЯ */
+
 .error {
   padding: 13px;
   margin-bottom: 20px;
-  background: #fff0f0;
   border-radius: 8px;
+  background: #fff0f0;
   color: #a03b3b;
   font-size: 14px;
 }
 
 .success {
   padding: 13px;
-  background: #eaf7ee;
   border-radius: 8px;
+  background: #eaf7ee;
   color: #28734a;
+  font-size: 15px;
   font-weight: bold;
 }
 
+/* ПАНЕЛЬ УПРАВЛЕНИЯ */
+
 .panel {
-  padding: 20px;
   margin-bottom: 15px;
+  padding: 20px;
   border: 1px solid #e0e7ed;
   border-radius: 12px;
 }
@@ -267,7 +323,10 @@ button {
   line-height: 1.6;
 }
 
-@media(max-width: 600px) {
+/* МОБИЛЬНАЯ ВЕРСИЯ */
+
+@media (max-width: 600px) {
+
   main {
     margin: 30px auto;
     padding: 15px;
@@ -281,7 +340,9 @@ button {
     font-size: 24px;
   }
 }
+
 </style>
+
 </head>
 
 <body>
@@ -291,13 +352,15 @@ button {
 </header>
 
 <main>
+
   <div class="card">
 
     <h1>Для разработчиков</h1>
 
-    ${form}
+    ${pageContent}
 
   </div>
+
 </main>
 
 </body>
@@ -305,20 +368,43 @@ button {
 `;
 }
 
-/* ПРОВЕРКА ПАРОЛЯ */
+/* =========================================
+   ПОЛУЧЕНИЕ СЕКРЕТНОГО ПАРОЛЯ
+========================================= */
+
+function getSecret(env) {
+
+  const password = env.ADMIN_PASSWORD;
+
+  if (
+    typeof password !== "string" ||
+    password.length === 0
+  ) {
+    return null;
+  }
+
+  return password;
+}
+
+/* =========================================
+   БЕЗОПАСНОЕ СРАВНЕНИЕ ПАРОЛЕЙ
+========================================= */
 
 async function passwordsMatch(input, secret) {
 
   const [inputHash, secretHash] =
     await Promise.all([
+
       crypto.subtle.digest(
         "SHA-256",
         encoder.encode(input)
       ),
+
       crypto.subtle.digest(
         "SHA-256",
         encoder.encode(secret)
       )
+
     ]);
 
   const a = new Uint8Array(inputHash);
@@ -333,9 +419,12 @@ async function passwordsMatch(input, secret) {
   return difference === 0;
 }
 
-/* ПОДПИСЬ СЕССИИ */
+/* =========================================
+   ПОДПИСЬ АДМИНИСТРАТИВНОЙ СЕССИИ
+========================================= */
 
 async function sessionKey(secret) {
+
   return crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -348,7 +437,10 @@ async function sessionKey(secret) {
   );
 }
 
+/* ПРЕОБРАЗОВАНИЕ В BASE64URL */
+
 function toBase64Url(bytes) {
+
   let binary = "";
 
   for (const byte of bytes) {
@@ -362,16 +454,17 @@ function toBase64Url(bytes) {
 }
 
 function fromBase64Url(value) {
+
   const encoded = value
     .replace(/-/g, "+")
     .replace(/_/g, "/");
 
-  const binary = atob(
-    encoded.padEnd(
-      Math.ceil(encoded.length / 4) * 4,
-      "="
-    )
+  const padded = encoded.padEnd(
+    Math.ceil(encoded.length / 4) * 4,
+    "="
   );
+
+  const binary = atob(padded);
 
   return Uint8Array.from(
     binary,
@@ -379,11 +472,15 @@ function fromBase64Url(value) {
   );
 }
 
+/* =========================================
+   СОЗДАНИЕ СЕССИИ
+========================================= */
+
 async function createSession(secret) {
 
   const expiry = String(
     Math.floor(Date.now() / 1000) +
-    SESSION_HOURS * 3600
+    SESSION_SECONDS
   );
 
   const key = await sessionKey(secret);
@@ -394,11 +491,16 @@ async function createSession(secret) {
     encoder.encode(expiry)
   );
 
-  return expiry + "." +
-    toBase64Url(new Uint8Array(signature));
+  return (
+    expiry +
+    "." +
+    toBase64Url(new Uint8Array(signature))
+  );
 }
 
-/* ЧТЕНИЕ COOKIE */
+/* =========================================
+   РАБОТА С COOKIE
+========================================= */
 
 function getCookie(request) {
 
@@ -417,7 +519,33 @@ function getCookie(request) {
     : null;
 }
 
-/* ПРОВЕРКА АВТОРИЗАЦИИ */
+function sessionCookie(value) {
+
+  return (
+    COOKIE_NAME + "=" + value +
+    "; Path=/" +
+    "; HttpOnly" +
+    "; Secure" +
+    "; SameSite=Strict" +
+    "; Max-Age=" + SESSION_SECONDS
+  );
+}
+
+function expiredCookie() {
+
+  return (
+    COOKIE_NAME + "=" +
+    "; Path=/" +
+    "; HttpOnly" +
+    "; Secure" +
+    "; SameSite=Strict" +
+    "; Max-Age=0"
+  );
+}
+
+/* =========================================
+   ПРОВЕРКА АВТОРИЗАЦИИ
+========================================= */
 
 async function isAuthorized(request, secret) {
 
@@ -448,7 +576,7 @@ async function isAuthorized(request, secret) {
     if (
       !Number.isSafeInteger(expiryNumber) ||
       expiryNumber <= now ||
-      expiryNumber > now + SESSION_HOURS * 3600
+      expiryNumber > now + SESSION_SECONDS
     ) {
       return false;
     }
@@ -462,168 +590,241 @@ async function isAuthorized(request, secret) {
       encoder.encode(expiry)
     );
 
-  } catch {
+  } catch (error) {
+
+    console.error(
+      "Ошибка проверки сессии:",
+      error
+    );
+
     return false;
   }
 }
 
-/* СОЗДАНИЕ COOKIE */
+/* =========================================
+   ПРОВЕРКА МЕЖСАЙТОВЫХ ЗАПРОСОВ
 
-function sessionCookie(value) {
-  return (
-    COOKIE_NAME + "=" + value +
-    "; Path=/" +
-    "; HttpOnly" +
-    "; Secure" +
-    "; SameSite=Strict" +
-    "; Max-Age=" + SESSION_HOURS * 3600
+   Исправленная версия.
+
+   Больше не сравниваем Origin
+   с адресом Cloudflare.
+
+   Вместо этого используем
+   Sec-Fetch-Site, если браузер
+   передаёт этот заголовок.
+========================================= */
+
+function isCrossSiteRequest(request) {
+
+  const fetchSite = request.headers.get(
+    "Sec-Fetch-Site"
   );
+
+  return fetchSite === "cross-site";
 }
 
-/* УДАЛЕНИЕ COOKIE */
+/* =========================================
+   GET — ОТКРЫТИЕ СТРАНИЦЫ
+========================================= */
 
-function expiredCookie() {
-  return (
-    COOKIE_NAME + "=" +
-    "; Path=/" +
-    "; HttpOnly" +
-    "; Secure" +
-    "; SameSite=Strict" +
-    "; Max-Age=0"
-  );
-}
+export async function onRequestGet(context) {
 
-/* ПЕРЕХОД ПОСЛЕ ВХОДА */
-
-function redirectWithCookie(cookie) {
-  return new Response(null, {
-    status: 303,
-    headers: {
-      "Location": "/developers",
-      "Set-Cookie": cookie,
-      "Cache-Control": "no-store"
-    }
-  });
-}
-
-/* ЕСЛИ СЕКРЕТ НЕ ПОДКЛЮЧЁН */
-
-function getSecret(env) {
-  return typeof env.ADMIN_PASSWORD === "string" &&
-    env.ADMIN_PASSWORD.length > 0
-      ? env.ADMIN_PASSWORD
-      : null;
-}
-
-/* ОТКРЫТИЕ СТРАНИЦЫ */
-
-export async function onRequestGet({ request, env }) {
+  const { request, env } = context;
 
   const secret = getSecret(env);
 
   if (!secret) {
+
     return htmlResponse(
       renderPage(
         false,
-        "Пароль администратора не настроен."
+        "Пароль администратора не настроен в Cloudflare."
       ),
       503
     );
   }
 
-  const loggedIn =
-    await isAuthorized(request, secret);
+  const loggedIn = await isAuthorized(
+    request,
+    secret
+  );
 
   return htmlResponse(
     renderPage(loggedIn)
   );
 }
 
-/* ОБРАБОТКА ВХОДА И ВЫХОДА */
+/* =========================================
+   POST — ВХОД И ВЫХОД
+========================================= */
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost(context) {
+
+  const { request, env } = context;
 
   const secret = getSecret(env);
 
   if (!secret) {
+
     return htmlResponse(
       renderPage(
         false,
-        "Пароль администратора не настроен."
+        "Пароль администратора не настроен в Cloudflare."
       ),
       503
     );
   }
 
   /*
-    Запрещаем отправку формы
-    с постороннего сайта.
+    ИСПРАВЛЕНИЕ FORBIDDEN
+
+    Блокируем явно межсайтовые
+    запросы, не полагаясь на
+    несовпадающие Origin.
   */
 
-  const origin = request.headers.get("Origin");
-  const expectedOrigin = new URL(request.url).origin;
+  if (isCrossSiteRequest(request)) {
 
-  if (origin && origin !== expectedOrigin) {
-    return new Response("Forbidden", {
-      status: 403
-    });
+    return new Response(
+      "Forbidden",
+      {
+        status: 403,
+        headers: {
+          "Cache-Control": "no-store"
+        }
+      }
+    );
   }
+
+  /*
+    Ограничиваем размер формы
+    по заголовку Content-Length.
+  */
 
   const contentLength = Number(
     request.headers.get("Content-Length") || "0"
   );
 
   if (contentLength > 4096) {
-    return new Response("Request too large", {
-      status: 413
-    });
+
+    return new Response(
+      "Request too large",
+      { status: 413 }
+    );
   }
+
+  /* ПОЛУЧАЕМ ДАННЫЕ ФОРМЫ */
 
   let form;
 
   try {
+
     form = await request.formData();
-  } catch {
+
+  } catch (error) {
+
     return htmlResponse(
-      renderPage(false, "Ошибка формы входа."),
+      renderPage(
+        false,
+        "Не удалось прочитать форму."
+      ),
       400
     );
   }
 
-  const action = String(form.get("action") || "");
+  const action = String(
+    form.get("action") || ""
+  );
 
-  /* ВЫХОД */
+  /* =====================================
+     ВЫХОД
+  ===================================== */
 
   if (action === "logout") {
+
+    /*
+      Выход разрешён только
+      из действующей сессии.
+    */
+
+    const loggedIn = await isAuthorized(
+      request,
+      secret
+    );
+
+    if (!loggedIn) {
+
+      return htmlResponse(
+        renderPage(false),
+        401
+      );
+    }
+
     return redirectWithCookie(
       expiredCookie()
     );
   }
 
+  /* =====================================
+     НЕИЗВЕСТНОЕ ДЕЙСТВИЕ
+  ===================================== */
+
   if (action !== "login") {
+
     return htmlResponse(
-      renderPage(false, "Неизвестное действие."),
+      renderPage(
+        false,
+        "Неизвестное действие."
+      ),
       400
     );
   }
 
-  /* ВХОД */
+  /* =====================================
+     ВХОД ПО ПАРОЛЮ
+  ===================================== */
 
   const password = String(
     form.get("password") || ""
   );
 
   if (
-    password.length > 256 ||
-    !(await passwordsMatch(password, secret))
+    password.length === 0 ||
+    password.length > 256
   ) {
+
     return htmlResponse(
-      renderPage(false, "Неверный пароль."),
+      renderPage(
+        false,
+        "Неверный пароль."
+      ),
       401
     );
   }
 
-  const session = await createSession(secret);
+  const correctPassword = await passwordsMatch(
+    password,
+    secret
+  );
+
+  if (!correctPassword) {
+
+    return htmlResponse(
+      renderPage(
+        false,
+        "Неверный пароль."
+      ),
+      401
+    );
+  }
+
+  /* СОЗДАЁМ СЕССИЮ */
+
+  const session = await createSession(
+    secret
+  );
+
+  /* СОХРАНЯЕМ COOKIE И ОТКРЫВАЕМ ПАНЕЛЬ */
 
   return redirectWithCookie(
     sessionCookie(session)
