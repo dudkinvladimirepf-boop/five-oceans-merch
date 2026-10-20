@@ -15,5 +15,14 @@
     "available": true,
     "featured": true,
     "new_arrival": false
+  },
+  {
+    "title": "Брелок субмарина",
+    "slug": "brelok_submarine",
+    "description": "брелок с изображением батискафа кусто",
+    "price": 500,
+    "available": true,
+    "featured": true,
+    "new_arrival": true
   }
 ]
