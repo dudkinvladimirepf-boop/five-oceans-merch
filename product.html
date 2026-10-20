@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -9,9 +8,9 @@
 <title>Товар — Клуб «5 океанов»</title>
 
 <style>
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -34,11 +33,11 @@ header {
 }
 
 header nav {
-  width: 100%;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 15px;
+  width: 100%;
 }
 
 .brand {
@@ -66,11 +65,7 @@ header nav .menu .global-cart-link {
   margin-left: 0;
 }
 
-.menu a:hover {
-  color: #c2d9e6;
-}
-
-/* ОСНОВНАЯ СТРАНИЦА */
+/* КАРТОЧКА ТОВАРА */
 
 main {
   max-width: 1150px;
@@ -87,6 +82,7 @@ main {
 /* ФОТОГРАФИИ */
 
 .main-photo {
+  display: block;
   width: 100%;
   aspect-ratio: 1;
   object-fit: contain;
@@ -96,8 +92,8 @@ main {
 
 .thumbnails {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
   margin-top: 12px;
 }
 
@@ -105,8 +101,8 @@ main {
   padding: 0;
   border: 2px solid transparent;
   border-radius: 8px;
-  cursor: pointer;
   background: white;
+  cursor: pointer;
 }
 
 .thumbnails button.active {
@@ -119,7 +115,7 @@ main {
   object-fit: contain;
 }
 
-/* ИНФОРМАЦИЯ О ТОВАРЕ */
+/* ИНФОРМАЦИЯ */
 
 h1 {
   font-size: 32px;
@@ -142,6 +138,37 @@ h1 {
 
 .status.off {
   color: #a03b3b;
+}
+
+/* СОСТОЯНИЕ КОРЗИНЫ */
+
+.cart-state {
+  margin: 25px 0;
+  padding: 18px;
+  border: 1px solid #d6e4dd;
+  border-radius: 12px;
+  background: #eef7f0;
+}
+
+.cart-state-title {
+  font-weight: bold;
+  color: #28734a;
+  margin-bottom: 12px;
+}
+
+.cart-state-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.cart-state-link {
+  display: inline-block;
+  margin-top: 15px;
+  color: #146789;
+  font-weight: bold;
+  font-size: 14px;
 }
 
 /* РАЗМЕРЫ */
@@ -181,7 +208,7 @@ h1 {
   font-size: 16px;
 }
 
-/* ДОБАВЛЕНИЕ В КОРЗИНУ */
+/* КНОПКА ДОБАВЛЕНИЯ */
 
 .add-cart {
   display: block;
@@ -202,6 +229,8 @@ h1 {
   cursor: not-allowed;
 }
 
+/* СООБЩЕНИЯ */
+
 .message {
   margin-top: 15px;
   line-height: 1.5;
@@ -215,17 +244,13 @@ h1 {
   color: #a03b3b;
 }
 
-/* КНОПКИ ПОСЛЕ ДОБАВЛЕНИЯ */
+/* КНОПКИ ПЕРЕХОДА */
 
 .cart-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 20px;
-}
-
-.cart-actions[hidden] {
-  display: none;
 }
 
 .action-button {
@@ -250,12 +275,6 @@ h1 {
   border: 1px solid #cbd5df;
 }
 
-.action-button:hover {
-  opacity: 0.85;
-}
-
-/* ПОДВАЛ */
-
 footer {
   text-align: center;
   padding: 40px;
@@ -264,7 +283,8 @@ footer {
 
 /* МОБИЛЬНАЯ ВЕРСИЯ */
 
-@media (max-width: 700px) {
+@media(max-width: 700px) {
+
   .product {
     grid-template-columns: 1fr;
     gap: 20px;
@@ -281,10 +301,6 @@ footer {
   .menu {
     gap: 12px;
     font-size: 12px;
-  }
-
-  header nav .menu .global-cart-link {
-    margin-left: 0;
   }
 
   main {
@@ -304,20 +320,15 @@ footer {
 
 <body>
 
-<!-- ВЕРХНЕЕ МЕНЮ -->
-
 <header>
   <nav>
-
     <a href="/" class="brand">
       5 ОКЕАНОВ
     </a>
 
     <div class="menu">
       <a href="/">На главную</a>
-      <!-- Корзина добавляется автоматически -->
     </div>
-
   </nav>
 </header>
 
@@ -327,13 +338,9 @@ footer {
   </div>
 </main>
 
-<footer>
-  Клуб «5 океанов»
-</footer>
+<footer>Клуб «5 океанов»</footer>
 
 <script>
-
-/* НАСТРОЙКИ */
 
 const CART_KEY = "five-oceans-cart-v1";
 
@@ -341,16 +348,15 @@ const slug = new URLSearchParams(
   window.location.search
 ).get("slug");
 
-const content = document.getElementById("content");
+const content =
+  document.getElementById("content");
 
-/* СОЗДАНИЕ HTML-ЭЛЕМЕНТОВ */
+/* ОБЩИЕ ФУНКЦИИ */
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
 
-  if (className) {
-    node.className = className;
-  }
+  if (className) node.className = className;
 
   if (text !== undefined) {
     node.textContent = text;
@@ -358,8 +364,6 @@ function el(tag, className, text) {
 
   return node;
 }
-
-/* ФОРМАТ ЦЕНЫ */
 
 function formatPrice(price) {
   if (
@@ -375,6 +379,34 @@ function formatPrice(price) {
     currency: "RUB",
     maximumFractionDigits: 0
   }).format(Number(price));
+}
+
+/* ЧТЕНИЕ СОХРАНЁННОЙ КОРЗИНЫ */
+
+function readCart() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(CART_KEY) || "[]"
+    );
+
+    return Array.isArray(saved) ? saved : [];
+
+  } catch (error) {
+    console.error("Ошибка чтения корзины:", error);
+    return [];
+  }
+}
+
+/* ПОЛУЧЕНИЕ КОЛИЧЕСТВА */
+
+function validQuantity(value) {
+  const n = Number(value);
+
+  if (!Number.isInteger(n) || n < 1) {
+    return 0;
+  }
+
+  return Math.min(n, 99);
 }
 
 /* ЗАГРУЗКА ТОВАРА */
@@ -422,9 +454,10 @@ async function loadProduct() {
       ? product.photos.filter(Boolean)
       : [];
 
-    if (photos.length > 0) {
+    if (photos.length) {
 
-      const mainImage = document.createElement("img");
+      const mainImage =
+        document.createElement("img");
 
       mainImage.className = "main-photo";
       mainImage.src = photos[0];
@@ -432,32 +465,38 @@ async function loadProduct() {
 
       gallery.appendChild(mainImage);
 
-      const thumbnails = el("div", "thumbnails");
+      const thumbnails =
+        el("div", "thumbnails");
 
       photos.forEach((photo, index) => {
 
-        const button = document.createElement("button");
+        const button =
+          document.createElement("button");
+
         button.type = "button";
 
         if (index === 0) {
           button.classList.add("active");
         }
 
-        const image = document.createElement("img");
-        image.src = photo;
-        image.alt = "Фото " + (index + 1);
+        const img =
+          document.createElement("img");
 
-        button.appendChild(image);
+        img.src = photo;
+        img.alt = "Фото " + (index + 1);
+
+        button.appendChild(img);
 
         button.addEventListener("click", () => {
 
           mainImage.src = photo;
 
           thumbnails.querySelectorAll("button")
-            .forEach(b => b.classList.remove("active"));
+            .forEach(b =>
+              b.classList.remove("active")
+            );
 
           button.classList.add("active");
-
         });
 
         thumbnails.appendChild(button);
@@ -471,16 +510,13 @@ async function loadProduct() {
       gallery.appendChild(
         el("p", "", "Фотография пока отсутствует")
       );
-
     }
 
-    /* НАЗВАНИЕ */
+    /* НАЗВАНИЕ И ОПИСАНИЕ */
 
     details.appendChild(
       el("h1", "", product.title)
     );
-
-    /* ОПИСАНИЕ */
 
     if (product.description) {
       details.appendChild(
@@ -488,15 +524,12 @@ async function loadProduct() {
       );
     }
 
-    /* ЦЕНА */
-
     details.appendChild(
       el("div", "price", formatPrice(product.price))
     );
 
-    /* НАЛИЧИЕ */
-
-    const available = product.available === true;
+    const available =
+      product.available === true;
 
     details.appendChild(
       el(
@@ -506,25 +539,64 @@ async function loadProduct() {
       )
     );
 
-    /* ВЫБОР РАЗМЕРА */
+    /* РАЗМЕРЫ */
 
     const sizes = Array.isArray(product.sizes)
-      ? product.sizes.filter(Boolean)
+      ? product.sizes.filter(Boolean).map(String)
       : [];
 
     let selectedSize = null;
 
-    if (sizes.length > 0) {
+    /*
+      Блок уже выбранных товаров.
+      Он будет обновляться по localStorage.
+    */
+
+    const cartState =
+      el("div", "cart-state");
+
+    cartState.hidden = true;
+
+    const cartStateTitle =
+      el("div", "cart-state-title");
+
+    const cartStateItems =
+      el("div", "cart-state-items");
+
+    const cartStateLink = el(
+      "a",
+      "cart-state-link",
+      "Посмотреть корзину →"
+    );
+
+    cartStateLink.href = "/cart.html";
+
+    cartState.appendChild(cartStateTitle);
+    cartState.appendChild(cartStateItems);
+    cartState.appendChild(cartStateLink);
+
+    details.appendChild(cartState);
+
+    /*
+      Создаём кнопки выбора размера.
+    */
+
+    const sizeButtonMap = new Map();
+
+    if (sizes.length) {
 
       details.appendChild(
         el("h3", "", "Выберите размер")
       );
 
-      const sizeButtons = el("div", "sizes");
+      const sizeButtons =
+        el("div", "sizes");
 
       sizes.forEach(size => {
 
-        const button = el("button", "size", size);
+        const button =
+          el("button", "size", size);
+
         button.type = "button";
         button.disabled = !available;
 
@@ -533,27 +605,31 @@ async function loadProduct() {
           selectedSize = size;
 
           sizeButtons.querySelectorAll("button")
-            .forEach(b => b.classList.remove("selected"));
+            .forEach(b =>
+              b.classList.remove("selected")
+            );
 
           button.classList.add("selected");
 
         });
 
-        sizeButtons.appendChild(button);
+        sizeButtonMap.set(size, button);
 
+        sizeButtons.appendChild(button);
       });
 
       details.appendChild(sizeButtons);
-
     }
 
     /* КОЛИЧЕСТВО */
 
-    details.appendChild(
-      el("h3", "", "Количество")
-    );
+    const quantityTitle =
+      el("h3", "", "Количество");
 
-    const quantity = document.createElement("input");
+    details.appendChild(quantityTitle);
+
+    const quantity =
+      document.createElement("input");
 
     quantity.type = "number";
     quantity.min = "1";
@@ -578,16 +654,19 @@ async function loadProduct() {
 
     details.appendChild(addButton);
 
-    /* СООБЩЕНИЕ */
-
     const message = el("p", "message");
-    message.setAttribute("aria-live", "polite");
+    message.setAttribute(
+      "aria-live",
+      "polite"
+    );
 
     details.appendChild(message);
 
     /* КНОПКИ ПЕРЕХОДА */
 
-    const actions = el("div", "cart-actions");
+    const actions =
+      el("div", "cart-actions");
+
     actions.hidden = true;
 
     const cartLink = el(
@@ -611,7 +690,10 @@ async function loadProduct() {
 
     details.appendChild(actions);
 
-    /* При возможности ведём обратно в категорию */
+    /*
+      Находим категорию для возврата
+      к покупкам.
+    */
 
     fetch("/data/categories.json", {
       cache: "no-store"
@@ -627,18 +709,136 @@ async function loadProduct() {
       );
 
       if (category && category.slug) {
+
         continueLink.href =
           "/category.html?slug=" +
           encodeURIComponent(category.slug);
       }
 
     })
-    .catch(() => {
-      // Если категории недоступны,
-      // ссылка ведёт на главную.
-    });
+    .catch(() => {});
 
-    /* ДОБАВЛЕНИЕ ТОВАРА В КОРЗИНУ */
+    /* =====================================
+       ОТОБРАЖЕНИЕ УЖЕ ДОБАВЛЕННОГО ТОВАРА
+    ===================================== */
+
+    function updateProductCartState() {
+
+      const savedCart = readCart();
+
+      const ownItems = savedCart.filter(item =>
+        item.slug === product.slug &&
+        validQuantity(item.quantity) > 0
+      );
+
+      const totalCount = ownItems.reduce(
+        (sum, item) =>
+          sum + validQuantity(item.quantity),
+        0
+      );
+
+      cartState.hidden = totalCount === 0;
+
+      cartStateItems.replaceChildren();
+
+      if (totalCount === 0) {
+
+        addButton.textContent =
+          "Добавить в корзину";
+
+        quantityTitle.textContent =
+          "Количество";
+
+      } else {
+
+        cartStateTitle.textContent =
+          "✓ Уже в корзине: " +
+          totalCount + " шт.";
+
+        addButton.textContent =
+          "Добавить ещё в корзину";
+
+        quantityTitle.textContent =
+          "Сколько добавить ещё";
+
+        /*
+          Показываем количество по каждому
+          размеру или общий объём, если
+          у товара нет размеров.
+        */
+
+        ownItems.forEach(item => {
+
+          const label = item.size
+            ? "Размер " + item.size
+            : "Без размера";
+
+          cartStateItems.appendChild(
+            el(
+              "div",
+              "",
+              label + " — " +
+              validQuantity(item.quantity) +
+              " шт."
+            )
+          );
+        });
+
+      }
+
+      /*
+        Обновляем надписи на кнопках размеров.
+      */
+
+      sizeButtonMap.forEach((button, size) => {
+
+        const count = ownItems
+          .filter(item => String(item.size) === size)
+          .reduce(
+            (sum, item) =>
+              sum + validQuantity(item.quantity),
+            0
+          );
+
+        button.textContent = count > 0
+          ? size + " · в корзине " + count
+          : size;
+      });
+
+      /*
+        Если пользователь ещё не выбрал размер,
+        а он уже есть в корзине,
+        восстанавливаем последний добавленный
+        размер, который доступен.
+      */
+
+      if (sizes.length && !selectedSize) {
+
+        const lastSaved = [...ownItems]
+          .reverse()
+          .find(item =>
+            sizes.includes(String(item.size))
+          );
+
+        if (lastSaved) {
+
+          selectedSize =
+            String(lastSaved.size);
+
+          const savedButton =
+            sizeButtonMap.get(selectedSize);
+
+          if (savedButton) {
+            savedButton.classList.add("selected");
+          }
+        }
+      }
+
+    }
+
+    /* =====================================
+       ДОБАВЛЕНИЕ В КОРЗИНУ
+    ===================================== */
 
     addButton.addEventListener("click", () => {
 
@@ -646,18 +846,15 @@ async function loadProduct() {
       message.className = "message";
       actions.hidden = true;
 
-      /* Проверяем размер */
-
-      if (sizes.length > 0 && !selectedSize) {
+      if (sizes.length && !selectedSize) {
 
         message.classList.add("error");
+
         message.textContent =
           "Сначала выберите размер.";
 
         return;
       }
-
-      /* Проверяем количество */
 
       const count = Number(quantity.value);
 
@@ -668,23 +865,16 @@ async function loadProduct() {
       ) {
 
         message.classList.add("error");
+
         message.textContent =
           "Укажите количество от 1 до 99.";
 
         return;
       }
 
-      /* Сохраняем корзину */
-
       try {
 
-        const saved = JSON.parse(
-          localStorage.getItem(CART_KEY) || "[]"
-        );
-
-        const cart = Array.isArray(saved)
-          ? saved
-          : [];
+        const cart = readCart();
 
         const existing = cart.find(item =>
           item.slug === product.slug &&
@@ -694,13 +884,16 @@ async function loadProduct() {
         if (existing) {
 
           const previousCount =
-            Number(existing.quantity) || 0;
+            validQuantity(existing.quantity);
 
           if (previousCount + count > 99) {
+
             message.classList.add("error");
+
             message.textContent =
-              "Максимум 99 штук одного товара " +
-              "в одном размере.";
+              "Для одного размера можно " +
+              "добавить максимум 99 шт.";
+
             return;
           }
 
@@ -714,7 +907,6 @@ async function loadProduct() {
             size: selectedSize,
             quantity: count
           });
-
         }
 
         localStorage.setItem(
@@ -722,13 +914,20 @@ async function loadProduct() {
           JSON.stringify(cart)
         );
 
-        /* Мгновенное обновление счётчика */
+        /*
+          Обновляем всю информацию
+          непосредственно на этой странице.
+        */
+
+        updateProductCartState();
+
+        /*
+          Обновляем верхний счётчик корзины.
+        */
 
         window.dispatchEvent(
           new Event("five-oceans-cart-updated")
         );
-
-        /* Подтверждение */
 
         message.classList.add("success");
 
@@ -742,18 +941,38 @@ async function loadProduct() {
         console.error(error);
 
         message.classList.add("error");
+
         message.textContent =
           "Не удалось сохранить корзину.";
+      }
+    });
 
+    /* СОХРАНЕНИЕ СОСТОЯНИЯ МЕЖДУ ПЕРЕХОДАМИ */
+
+    window.addEventListener(
+      "pageshow",
+      updateProductCartState
+    );
+
+    window.addEventListener("storage", event => {
+
+      if (
+        event.key === CART_KEY ||
+        event.key === null
+      ) {
+        updateProductCartState();
       }
 
     });
+
+    /* ПЕРВОНАЧАЛЬНАЯ ПРОВЕРКА КОРЗИНЫ */
+
+    updateProductCartState();
 
     /* СОБИРАЕМ СТРАНИЦУ */
 
     layout.appendChild(gallery);
     layout.appendChild(details);
-
     content.appendChild(layout);
 
   } catch (error) {
@@ -762,16 +981,14 @@ async function loadProduct() {
 
     content.textContent =
       "Не удалось загрузить информацию о товаре.";
-
   }
-
 }
 
 loadProduct();
 
 </script>
 
-<!-- ОБЩИЙ МОДУЛЬ КОРЗИНЫ -->
+<!-- ОБЩАЯ КОРЗИНА -->
 
 <script src="/cart-nav.js" defer></script>
 
