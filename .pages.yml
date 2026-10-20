@@ -1,4 +1,5 @@
 
+
 media:
   input: media
   output: /media
@@ -12,11 +13,21 @@ content:
     format: json
     list: true
     fields:
+      - name: product_id
+        label: Внутренний ID товара
+        type: uuid
+        required: true
+        readonly: true
+        description: Постоянный идентификатор. Не изменять.
+        options:
+          editable: false
+          generate: false
+
       - name: title
         label: Название товара
         type: string
         required: true
-      
+
       - name: slug
         label: Адрес товара
         type: string
@@ -25,33 +36,38 @@ content:
       - name: description
         label: Описание
         type: text
+
       - name: price
         label: Цена в рублях
         type: number
+
       - name: category
         label: Категория
         type: string
+
       - name: photos
         label: Фотографии
         type: image
         options:
           multiple:
             max: 6
+
       - name: sizes
         label: Размеры
         type: string
         list: true
-     
+
       - name: available
         label: В наличии
         type: boolean
+
       - name: featured
         label: Наш выбор
         type: boolean
+
       - name: new_arrival
         label: Новинка
         type: boolean
-
 
   - name: categories
     label: Категории
@@ -64,19 +80,23 @@ content:
         label: Название категории
         type: string
         required: true
+
       - name: id
         label: Идентификатор категории
         type: string
         required: true
         description: Должен совпадать с категорией товара
+
       - name: slug
         label: Адрес категории
         type: string
         required: true
         description: Латинскими буквами, без пробелов
+
       - name: description
         label: Описание категории
         type: text
+
       - name: image
         label: Фотография категории
         type: image
