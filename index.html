@@ -5,10 +5,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>Мерч Клуба «5 океанов»</title>
 
 <style>
-* { box-sizing: border-box; }
+
+/* Общие настройки */
+
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -17,7 +23,12 @@ body {
   font-family: Arial, sans-serif;
 }
 
-a { color: inherit; text-decoration: none; }
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Верхнее меню */
 
 header {
   background: #102c43;
@@ -45,12 +56,17 @@ nav {
   font-size: 14px;
 }
 
+/* Главный баннер */
+
 .hero {
   padding: 95px 20px;
   color: white;
   text-align: center;
-  background:
-    linear-gradient(135deg, #102c43, #146789);
+  background: linear-gradient(
+    135deg,
+    #102c43,
+    #146789
+  );
 }
 
 .hero h1 {
@@ -76,6 +92,8 @@ nav {
   font-weight: bold;
 }
 
+/* Основное содержимое */
+
 main {
   max-width: 1150px;
   margin: auto;
@@ -92,6 +110,8 @@ main {
   margin-bottom: 35px;
 }
 
+/* Сетка категорий */
+
 .categories {
   display: grid;
   grid-template-columns:
@@ -99,13 +119,17 @@ main {
   gap: 25px;
 }
 
+/* Карточки категорий и товаров */
+
 .category {
   display: block;
   background: white;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 20px #102c4310;
-  transition: transform .2s, box-shadow .2s;
+  transition:
+    transform .2s,
+    box-shadow .2s;
 }
 
 .category:hover {
@@ -116,7 +140,11 @@ main {
 .category-cover {
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: linear-gradient(135deg, #d6e8f0, #5e9db5);
+  background: linear-gradient(
+    135deg,
+    #d6e8f0,
+    #5e9db5
+  );
   overflow: hidden;
 }
 
@@ -138,7 +166,9 @@ main {
   letter-spacing: 2px;
 }
 
-.category-info { padding: 24px; }
+.category-info {
+  padding: 24px;
+}
 
 .category-info h3 {
   margin: 0 0 12px;
@@ -162,6 +192,27 @@ main {
   font-weight: bold;
 }
 
+/* Раздел Наш выбор */
+
+#featured {
+  margin-top: 65px;
+}
+
+#featured .categories {
+  grid-template-columns:
+    repeat(auto-fill, minmax(200px, 240px));
+}
+
+#featured .category-cover img {
+  object-fit: contain;
+}
+
+#featured .category-info h3 {
+  font-size: 19px;
+}
+
+/* Раздел О клубе */
+
 .about {
   margin-top: 65px;
   padding: 45px;
@@ -169,12 +220,16 @@ main {
   border-radius: 18px;
 }
 
-.about h2 { margin-top: 0; }
+.about h2 {
+  margin-top: 0;
+}
 
 .about p {
   line-height: 1.8;
   color: #526778;
 }
+
+/* Подвал */
 
 footer {
   background: #102c43;
@@ -183,26 +238,46 @@ footer {
   text-align: center;
 }
 
-@media (max-width: 600px) {
-  header { padding: 18px; }
-  .brand { font-size: 17px; }
-  .menu { gap: 12px; }
-  .hero { padding: 65px 20px; }
-  .hero p { font-size: 16px; }
-  main { padding: 35px 18px; }
-  .section-title { font-size: 27px; }
-  .about { padding: 25px; }
-}
-/* Компактные карточки раздела Наш выбор */
-#featured .categories {
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(200px, 240px)
-  );
-}
+/* Адаптация под телефон */
 
-#featured .category-cover img {
-  object-fit: contain;
+@media (max-width: 600px) {
+
+  header {
+    padding: 18px;
+  }
+
+  .brand {
+    font-size: 17px;
+  }
+
+  .menu {
+    gap: 12px;
+  }
+
+  .hero {
+    padding: 65px 20px;
+  }
+
+  .hero p {
+    font-size: 16px;
+  }
+
+  main {
+    padding: 35px 18px;
+  }
+
+  .section-title {
+    font-size: 27px;
+  }
+
+  .about {
+    padding: 25px;
+  }
+
+  #featured .categories {
+    grid-template-columns:
+      repeat(auto-fill, minmax(145px, 1fr));
+  }
 }
 
 </style>
@@ -210,32 +285,51 @@ footer {
 
 <body>
 
+<!-- Верхнее меню -->
+
 <header>
   <nav>
-    <a class="brand" href="/">5 ОКЕАНОВ</a>
+
+    <a class="brand" href="/">
+      5 ОКЕАНОВ
+    </a>
+
     <div class="menu">
       <a href="/">Главная</a>
       <a href="#catalog">Каталог</a>
     </div>
+
   </nav>
 </header>
 
+<!-- Главный баннер -->
+
 <section class="hero">
+
   <h1>Мерч для тех, кто любит океан</h1>
+
   <p>
     Одежда и аксессуары, вдохновлённые
     морскими путешествиями и экспедициями
     Клуба «5 океанов».
   </p>
+
   <a class="hero-button" href="#catalog">
     Смотреть коллекцию
   </a>
+
 </section>
 
 <main>
 
+  <!-- Категории -->
+
   <section id="catalog">
-    <h2 class="section-title">Наши коллекции</h2>
+
+    <h2 class="section-title">
+      Наши коллекции
+    </h2>
+
     <p class="section-description">
       Выберите категорию товаров
     </p>
@@ -243,17 +337,24 @@ footer {
     <div id="categories" class="categories">
       Загружаем категории...
     </div>
+
   </section>
 
-  <section class="about">
-    <h2>Клуб «5 океанов»</h2>
-    <p>
-      Мы исследуем океаны, путешествуем под
-      парусом и делимся любовью к морю.
+  <!-- Сюда автоматически добавится Наш выбор -->
 
+  <!-- О клубе -->
+
+  <section class="about">
+
+    <h2>Клуб «5 океанов»</h2>
+
+    <p>
+      Мы исследуем океаны, путешествуем
+      под парусом и делимся любовью к морю.
       Наш мерч — небольшая часть большого
       экспедиционного приключения.
     </p>
+
   </section>
 
 </main>
@@ -263,45 +364,116 @@ footer {
 </footer>
 
 <script>
-const container = document.getElementById("categories");
 
-function getProductCount(n) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-
-  if (mod100 >= 11 && mod100 <= 14)
-    return `${n} товаров`;
-
-  if (mod10 === 1)
-    return `${n} товар`;
-
-  if (mod10 >= 2 && mod10 <= 4)
-    return `${n} товара`;
-
-  return `${n} товаров`;
-}
+/* ==========================================
+   ОБЩИЕ ФУНКЦИИ
+========================================== */
 
 function makeElement(tag, className, text) {
+
   const el = document.createElement(tag);
-  if (className) el.className = className;
-  if (text !== undefined) el.textContent = text;
+
+  if (className) {
+    el.className = className;
+  }
+
+  if (text !== undefined) {
+    el.textContent = text;
+  }
+
   return el;
 }
 
+/* Сравнение категорий */
+
+function normalize(value) {
+
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+
+}
+
+/* Формат цены */
+
+function formatPrice(price) {
+
+  if (
+    price === null ||
+    price === undefined ||
+    price === ""
+  ) {
+    return "Цена уточняется";
+  }
+
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0
+  }).format(Number(price));
+
+}
+
+/* Правильное склонение количества товаров */
+
+function getProductCount(n) {
+
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+
+  if (mod100 >= 11 && mod100 <= 14) {
+    return n + " товаров";
+  }
+
+  if (mod10 === 1) {
+    return n + " товар";
+  }
+
+  if (mod10 >= 2 && mod10 <= 4) {
+    return n + " товара";
+  }
+
+  return n + " товаров";
+
+}
+
+/* ==========================================
+   ЗАГРУЗКА КАТЕГОРИЙ
+========================================== */
+
 async function loadCategories() {
+
+  const container = document.getElementById(
+    "categories"
+  );
+
   try {
+
     const responses = await Promise.all([
-      fetch("/data/categories.json", {cache: "no-store"}),
-      fetch("/data/products.json", {cache: "no-store"})
+
+      fetch("/data/categories.json", {
+        cache: "no-store"
+      }),
+
+      fetch("/data/products.json", {
+        cache: "no-store"
+      })
+
     ]);
 
     if (responses.some(r => !r.ok)) {
       throw new Error("Ошибка загрузки");
     }
 
-    const [categories, products] = await Promise.all(
-      responses.map(r => r.json())
-    );
+    const [categories, products] =
+      await Promise.all(
+        responses.map(r => r.json())
+      );
+
+    if (!Array.isArray(categories) ||
+        !Array.isArray(products)) {
+      throw new Error("Неверный формат данных");
+    }
 
     container.replaceChildren();
 
@@ -311,49 +483,87 @@ async function loadCategories() {
       return;
     }
 
-    const normalize = s =>
-      String(s || "").trim().toLowerCase();
+    /* Создание карточек категорий */
 
     categories.forEach(category => {
+
       const matching = products.filter(p =>
-        normalize(p.category) === normalize(category.id)
+        normalize(p.category) ===
+        normalize(category.id)
       );
 
-      const link = document.createElement("a");
-      link.className = "category";
+      const link = makeElement(
+        "a",
+        "category"
+      );
+
       link.href = "/category.html?slug=" +
         encodeURIComponent(category.slug);
 
-      const cover = makeElement("div", "category-cover");
+      /* Изображение категории */
 
-      const examplePhoto = matching.find(p =>
-        p.photos && p.photos.length
-      )?.photos?.[0];
+      const cover = makeElement(
+        "div",
+        "category-cover"
+      );
+
+      const exampleProduct = matching.find(p =>
+        Array.isArray(p.photos) &&
+        p.photos.length > 0
+      );
+
+      const examplePhoto =
+        exampleProduct?.photos?.[0];
 
       const photo = category.image || examplePhoto;
 
       if (photo) {
+
         const img = document.createElement("img");
+
         img.src = photo;
         img.alt = category.title;
         img.loading = "lazy";
+
         cover.appendChild(img);
+
       } else {
+
         cover.appendChild(
-          makeElement("div", "fallback", "5 ОКЕАНОВ")
+          makeElement(
+            "div",
+            "fallback",
+            "5 ОКЕАНОВ"
+          )
         );
+
       }
 
-      const info = makeElement("div", "category-info");
+      /* Информация категории */
+
+      const info = makeElement(
+        "div",
+        "category-info"
+      );
 
       info.appendChild(
-        makeElement("h3", "", category.title)
+        makeElement(
+          "h3",
+          "",
+          category.title
+        )
       );
 
       if (category.description) {
+
         info.appendChild(
-          makeElement("p", "", category.description)
+          makeElement(
+            "p",
+            "",
+            category.description
+          )
         );
+
       }
 
       info.appendChild(
@@ -374,122 +584,238 @@ async function loadCategories() {
         )
       );
 
-      link.append(cover, info);
+      link.appendChild(cover);
+      link.appendChild(info);
+
       container.appendChild(link);
+
     });
 
-  } catch(error) {
+  } catch (error) {
+
+    console.error(
+      "Ошибка загрузки категорий:",
+      error
+    );
+
     container.textContent =
       "Не удалось загрузить категории.";
-    console.error(error);
+
   }
+
 }
 
+/* ==========================================
+   РАЗДЕЛ НАШ ВЫБОР
+========================================== */
 
 async function loadFeaturedProducts() {
-  try {
-    const [productsResponse, categoriesResponse] =
-      await Promise.all([
-        fetch("/data/products.json", { cache: "no-store" }),
-        fetch("/data/categories.json", { cache: "no-store" })
-      ]);
 
-    if (!productsResponse.ok || !categoriesResponse.ok) {
+  try {
+
+    /* Загружаем товары и категории */
+
+    const responses = await Promise.all([
+
+      fetch("/data/products.json", {
+        cache: "no-store"
+      }),
+
+      fetch("/data/categories.json", {
+        cache: "no-store"
+      })
+
+    ]);
+
+    if (responses.some(r => !r.ok)) {
       throw new Error("Ошибка загрузки товаров");
     }
 
-    const products = await productsResponse.json();
-    const categories = await categoriesResponse.json();
+    const [products, categories] =
+      await Promise.all(
+        responses.map(r => r.json())
+      );
+
+    if (!Array.isArray(products) ||
+        !Array.isArray(categories)) {
+      throw new Error("Неверный формат данных");
+    }
+
+    /* Берём товары с отметкой Наш выбор */
 
     const featured = products.filter(product =>
       product.featured === true &&
       product.available === true
     );
 
-    if (!featured.length) return;
+    /* Если таких товаров нет, блок не показываем */
+
+    if (!featured.length) {
+      return;
+    }
+
+    /* Создаём раздел */
 
     const section = makeElement("section");
+
     section.id = "featured";
-    section.style.marginTop = "65px";
 
     const title = makeElement(
-      "h2", "section-title", "Наш выбор"
+      "h2",
+      "section-title",
+      "Наш выбор"
     );
 
     const subtitle = makeElement(
-      "p", "section-description",
+      "p",
+      "section-description",
       "Товары, которые мы особенно рекомендуем"
     );
 
-    const grid = makeElement("div", "categories");
+    const grid = makeElement(
+      "div",
+      "categories"
+    );
+
+    /* Карточки рекомендованных товаров */
 
     featured.forEach(product => {
+
       const category = categories.find(c =>
-        String(c.id).trim().toLowerCase() ===
-        String(product.category).trim().toLowerCase()
+        normalize(c.id) ===
+        normalize(product.category)
       );
 
-      const card = makeElement("a", "category");
+      const card = makeElement(
+        "a",
+        "category"
+      );
 
-      card.href = category
-        ? "/category.html?slug=" +
-          encodeURIComponent(category.slug)
-        : "#catalog";
+      /*
+        ВАЖНО:
+        Переход на конкретную страницу товара.
+        Если slug товара отсутствует,
+        переход на категорию.
+      */
 
-      const cover = makeElement("div", "category-cover");
+      if (product.slug) {
 
-      if (product.photos && product.photos.length) {
+        card.href = "/product.html?slug=" +
+          encodeURIComponent(product.slug);
+
+      } else if (category) {
+
+        card.href = "/category.html?slug=" +
+          encodeURIComponent(category.slug);
+
+      } else {
+
+        card.href = "#catalog";
+
+      }
+
+      /* Фотография товара */
+
+      const cover = makeElement(
+        "div",
+        "category-cover"
+      );
+
+      const photos = Array.isArray(product.photos)
+        ? product.photos.filter(Boolean)
+        : [];
+
+      if (photos.length > 0) {
+
         const img = document.createElement("img");
-        img.src = product.photos[0];
+
+        img.src = photos[0];
         img.alt = product.title;
         img.loading = "lazy";
+
         cover.appendChild(img);
+
       } else {
+
         cover.appendChild(
-          makeElement("div", "fallback", "5 ОКЕАНОВ")
+          makeElement(
+            "div",
+            "fallback",
+            "5 ОКЕАНОВ"
+          )
         );
+
       }
 
-      const info = makeElement("div", "category-info");
+      /* Название, цена и ссылка */
 
-      info.appendChild(
-        makeElement("h3", "", product.title)
+      const info = makeElement(
+        "div",
+        "category-info"
       );
-
-      if (product.price != null) {
-        const price = new Intl.NumberFormat("ru-RU", {
-          style: "currency",
-          currency: "RUB",
-          maximumFractionDigits: 0
-        }).format(product.price);
-
-        const priceElement = makeElement("h3", "", price);
-        info.appendChild(priceElement);
-      }
 
       info.appendChild(
         makeElement(
-          "div", "open-category", "Смотреть товар →"
+          "h3",
+          "",
+          product.title || "Товар"
         )
       );
 
-      card.append(cover, info);
+      info.appendChild(
+        makeElement(
+          "h3",
+          "",
+          formatPrice(product.price)
+        )
+      );
+
+      info.appendChild(
+        makeElement(
+          "div",
+          "open-category",
+          product.slug
+            ? "Подробнее о товаре →"
+            : "Смотреть категорию →"
+        )
+      );
+
+      card.appendChild(cover);
+      card.appendChild(info);
+
       grid.appendChild(card);
+
     });
 
-    section.append(title, subtitle, grid);
+    section.appendChild(title);
+    section.appendChild(subtitle);
+    section.appendChild(grid);
+
+    /* Размещаем блок перед разделом О клубе */
 
     const main = document.querySelector("main");
+
     const about = main.querySelector(".about");
 
     main.insertBefore(section, about);
 
   } catch (error) {
-    console.error("Ошибка блока Наш выбор:", error);
+
+    console.error(
+      "Ошибка блока Наш выбор:",
+      error
+    );
+
   }
+
 }
 
+/* ==========================================
+   ЗАПУСК
+========================================== */
+
 loadCategories();
+
 loadFeaturedProducts();
 
 </script>
