@@ -24,34 +24,60 @@ a {
   text-decoration: none;
 }
 
-/* Верхнее меню */
+/* ВЕРХНЕЕ МЕНЮ */
 
 header {
   background: #102c43;
   color: white;
-  padding: 22px 6%;
+  padding: 22px 3%;
 }
 
-nav {
-  max-width: 1150px;
-  margin: auto;
+header nav {
+  width: 100%;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  align-items: center;
+  gap: 15px;
 }
 
 .brand {
   font-weight: bold;
   font-size: 21px;
+  white-space: nowrap;
 }
 
-.back {
-  color: #c2d9e6;
+/* Ссылки справа */
+
+.menu {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
   font-size: 14px;
 }
 
-/* Заголовок категории */
+.menu .back {
+  color: white;
+  font-size: inherit;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Единый стиль корзины и кнопки На главную */
+
+header nav .menu .global-cart-link {
+  margin-left: 0;
+  font-size: inherit;
+  font-weight: 400;
+  color: white;
+  white-space: nowrap;
+}
+
+.menu a:hover {
+  color: #c2d9e6;
+}
+
+/* ЗАГОЛОВОК КАТЕГОРИИ */
 
 .hero {
   background: #102c43;
@@ -70,7 +96,7 @@ nav {
   line-height: 1.5;
 }
 
-/* Каталог */
+/* КАТАЛОГ */
 
 main {
   max-width: 1150px;
@@ -86,7 +112,7 @@ main {
   gap: 24px;
 }
 
-/* Карточка товара */
+/* КАРТОЧКА ТОВАРА */
 
 .card {
   display: block;
@@ -94,8 +120,9 @@ main {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 20px #102c4310;
-  transition: transform 0.2s,
-              box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 a.card {
@@ -145,7 +172,7 @@ a.card:hover {
   margin: 18px 0;
 }
 
-/* Наличие */
+/* НАЛИЧИЕ */
 
 .status {
   font-size: 13px;
@@ -156,7 +183,7 @@ a.card:hover {
   color: #a03b3b;
 }
 
-/* Размеры */
+/* РАЗМЕРЫ */
 
 .sizes {
   display: flex;
@@ -172,7 +199,7 @@ a.card:hover {
   font-size: 14px;
 }
 
-/* Ссылка на подробную карточку */
+/* ПЕРЕХОД К ТОВАРУ */
 
 .open-product {
   margin-top: 20px;
@@ -186,7 +213,7 @@ a.card:hover {
   font-size: 13px;
 }
 
-/* Нижняя часть */
+/* ПОДВАЛ */
 
 footer {
   padding: 40px 20px;
@@ -194,15 +221,25 @@ footer {
   color: #71808e;
 }
 
-/* Телефоны */
+/* МОБИЛЬНАЯ ВЕРСИЯ */
 
 @media (max-width: 600px) {
+
   header {
-    padding: 18px;
+    padding: 18px 14px;
   }
 
   .brand {
-    font-size: 18px;
+    font-size: 17px;
+  }
+
+  .menu {
+    gap: 12px;
+    font-size: 12px;
+  }
+
+  header nav .menu .global-cart-link {
+    margin-left: 0;
   }
 
   main {
@@ -223,32 +260,49 @@ footer {
     font-size: 17px;
   }
 }
+
 </style>
 </head>
 
 <body>
 
+<!-- ВЕРХНЕЕ МЕНЮ -->
+
 <header>
   <nav>
+
     <a href="/" class="brand">
       5 ОКЕАНОВ
     </a>
 
-    <a href="/" class="back">
-      ← На главную
-    </a>
+    <div class="menu">
+      <a href="/" class="back">
+        На главную
+      </a>
+      <!-- Корзина добавляется через cart-nav.js -->
+    </div>
+
   </nav>
 </header>
 
+<!-- ЗАГОЛОВОК КАТЕГОРИИ -->
+
 <section class="hero">
+
   <h1 id="categoryTitle">Каталог</h1>
+
   <p id="categoryDescription"></p>
+
 </section>
 
+<!-- ТОВАРЫ -->
+
 <main>
+
   <div id="products" class="products">
     Загружаем товары...
   </div>
+
 </main>
 
 <footer>
@@ -257,7 +311,7 @@ footer {
 
 <script>
 
-/* Получаем категорию из адреса */
+/* ПАРАМЕТР КАТЕГОРИИ */
 
 const params = new URLSearchParams(
   window.location.search
@@ -269,9 +323,10 @@ const container = document.getElementById(
   "products"
 );
 
-/* Создание безопасных HTML-элементов */
+/* СОЗДАНИЕ ЭЛЕМЕНТОВ */
 
 function createElement(tag, className, text) {
+
   const node = document.createElement(tag);
 
   if (className) {
@@ -285,20 +340,25 @@ function createElement(tag, className, text) {
   return node;
 }
 
-/* Сравнение категорий */
+/* СРАВНЕНИЕ КАТЕГОРИЙ */
 
 function normalize(value) {
+
   return String(value || "")
     .trim()
     .toLowerCase();
+
 }
 
-/* Форматирование цены */
+/* ФОРМАТИРОВАНИЕ ЦЕНЫ */
 
 function formatPrice(price) {
-  if (price === null ||
-      price === undefined ||
-      price === "") {
+
+  if (
+    price === null ||
+    price === undefined ||
+    price === ""
+  ) {
     return "Цена уточняется";
   }
 
@@ -309,18 +369,13 @@ function formatPrice(price) {
   }).format(Number(price));
 }
 
-/* Создание карточки товара */
+/* СОЗДАНИЕ КАРТОЧКИ ТОВАРА */
 
 function createProductCard(product) {
 
   const hasSlug =
     typeof product.slug === "string" &&
     product.slug.trim().length > 0;
-
-  /*
-    Если у товара есть slug,
-    создаём кликабельную карточку.
-  */
 
   const card = createElement(
     hasSlug ? "a" : "article",
@@ -332,7 +387,7 @@ function createProductCard(product) {
       encodeURIComponent(product.slug.trim());
   }
 
-  /* Фотография */
+  /* Фотографии */
 
   const photos = Array.isArray(product.photos)
     ? product.photos.filter(Boolean)
@@ -357,10 +412,9 @@ function createProductCard(product) {
         "5 ОКЕАНОВ"
       )
     );
-
   }
 
-  /* Информация о товаре */
+  /* Информация */
 
   const info = createElement("div", "info");
 
@@ -436,7 +490,7 @@ function createProductCard(product) {
     info.appendChild(sizeContainer);
   }
 
-  /* Переход на страницу товара */
+  /* Ссылка на товар */
 
   if (hasSlug) {
 
@@ -457,7 +511,6 @@ function createProductCard(product) {
         "Страница товара пока не настроена"
       )
     );
-
   }
 
   card.appendChild(info);
@@ -465,7 +518,7 @@ function createProductCard(product) {
   return card;
 }
 
-/* Загрузка каталога */
+/* ЗАГРУЗКА КАТЕГОРИИ */
 
 async function loadCategory() {
 
@@ -476,8 +529,6 @@ async function loadCategory() {
         "Не указан адрес категории"
       );
     }
-
-    /* Получаем данные */
 
     const responses = await Promise.all([
 
@@ -502,14 +553,16 @@ async function loadCategory() {
         responses.map(r => r.json())
       );
 
-    if (!Array.isArray(categories) ||
-        !Array.isArray(products)) {
+    if (
+      !Array.isArray(categories) ||
+      !Array.isArray(products)
+    ) {
       throw new Error(
         "Неверный формат данных"
       );
     }
 
-    /* Находим нужную категорию */
+    /* Поиск категории */
 
     const category = categories.find(c =>
       normalize(c.slug) === normalize(categorySlug)
@@ -527,7 +580,7 @@ async function loadCategory() {
       return;
     }
 
-    /* Показываем название категории */
+    /* Заголовок */
 
     document.title =
       category.title + " — 5 океанов";
@@ -540,7 +593,7 @@ async function loadCategory() {
       "categoryDescription"
     ).textContent = category.description || "";
 
-    /* Отбираем товары категории */
+    /* Фильтрация товаров */
 
     const matchingProducts = products.filter(
       product =>
@@ -548,11 +601,7 @@ async function loadCategory() {
         normalize(category.id)
     );
 
-    /* Очищаем старое содержимое */
-
     container.replaceChildren();
-
-    /* Если товаров нет */
 
     if (matchingProducts.length === 0) {
 
@@ -562,7 +611,7 @@ async function loadCategory() {
       return;
     }
 
-    /* Создаём карточку каждого товара */
+    /* Вывод карточек */
 
     matchingProducts.forEach(product => {
 
@@ -582,16 +631,16 @@ async function loadCategory() {
     container.textContent =
       "Не удалось загрузить товары. " +
       "Попробуйте обновить страницу.";
-
   }
 }
 
-/* Запускаем загрузку */
+/* ЗАПУСК */
 
 loadCategory();
 
-
 </script>
+
+<!-- ЕДИНАЯ КОРЗИНА -->
 
 <script src="/cart-nav.js" defer></script>
 
