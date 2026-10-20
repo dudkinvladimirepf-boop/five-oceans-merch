@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -9,9 +8,6 @@
 <title>Мерч Клуба «5 океанов»</title>
 
 <style>
-
-/* Общие настройки */
-
 * {
   box-sizing: border-box;
 }
@@ -28,7 +24,7 @@ a {
   text-decoration: none;
 }
 
-/* Верхнее меню */
+/* ВЕРХНЕЕ МЕНЮ */
 
 header {
   background: #102c43;
@@ -52,21 +48,18 @@ nav {
 
 .menu {
   display: flex;
+  align-items: center;
   gap: 24px;
   font-size: 14px;
 }
 
-/* Главный баннер */
+/* ГЛАВНЫЙ БАННЕР */
 
 .hero {
   padding: 95px 20px;
   color: white;
   text-align: center;
-  background: linear-gradient(
-    135deg,
-    #102c43,
-    #146789
-  );
+  background: linear-gradient(135deg, #102c43, #146789);
 }
 
 .hero h1 {
@@ -92,7 +85,7 @@ nav {
   font-weight: bold;
 }
 
-/* Основное содержимое */
+/* ОСНОВНОЕ СОДЕРЖИМОЕ */
 
 main {
   max-width: 1150px;
@@ -110,7 +103,7 @@ main {
   margin-bottom: 35px;
 }
 
-/* Сетка категорий */
+/* СЕТКА КАТЕГОРИЙ */
 
 .categories {
   display: grid;
@@ -119,7 +112,7 @@ main {
   gap: 25px;
 }
 
-/* Карточки категорий и товаров */
+/* КАРТОЧКИ */
 
 .category {
   display: block;
@@ -127,9 +120,7 @@ main {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 20px #102c4310;
-  transition:
-    transform .2s,
-    box-shadow .2s;
+  transition: transform .2s, box-shadow .2s;
 }
 
 .category:hover {
@@ -140,11 +131,7 @@ main {
 .category-cover {
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: linear-gradient(
-    135deg,
-    #d6e8f0,
-    #5e9db5
-  );
+  background: linear-gradient(135deg, #d6e8f0, #5e9db5);
   overflow: hidden;
 }
 
@@ -192,26 +179,27 @@ main {
   font-weight: bold;
 }
 
-/* Раздел Наш выбор */
+/* НОВИНКИ И НАШ ВЫБОР */
 
-#featured {
+.showcase {
   margin-top: 65px;
 }
 
-#featured .categories {
+/* Компактные карточки товаров */
+.showcase .categories {
   grid-template-columns:
     repeat(auto-fill, minmax(200px, 240px));
 }
 
-#featured .category-cover img {
+.showcase .category-cover img {
   object-fit: contain;
 }
 
-#featured .category-info h3 {
+.showcase .category-info h3 {
   font-size: 19px;
 }
 
-/* Раздел О клубе */
+/* О КЛУБЕ */
 
 .about {
   margin-top: 65px;
@@ -229,7 +217,7 @@ main {
   color: #526778;
 }
 
-/* Подвал */
+/* ПОДВАЛ */
 
 footer {
   background: #102c43;
@@ -238,10 +226,9 @@ footer {
   text-align: center;
 }
 
-/* Адаптация под телефон */
+/* МОБИЛЬНАЯ ВЕРСИЯ */
 
 @media (max-width: 600px) {
-
   header {
     padding: 18px;
   }
@@ -274,38 +261,33 @@ footer {
     padding: 25px;
   }
 
-  #featured .categories {
+  .showcase .categories {
     grid-template-columns:
       repeat(auto-fill, minmax(145px, 1fr));
   }
 }
-
 </style>
 </head>
 
 <body>
 
-<!-- Верхнее меню -->
+<!-- ВЕРХНЕЕ МЕНЮ -->
 
 <header>
   <nav>
-
-    <a class="brand" href="/">
-      5 ОКЕАНОВ
-    </a>
+    <a class="brand" href="/">5 ОКЕАНОВ</a>
 
     <div class="menu">
       <a href="/">Главная</a>
       <a href="#catalog">Каталог</a>
+      <!-- Корзина добавляется через cart-nav.js -->
     </div>
-
   </nav>
 </header>
 
-<!-- Главный баннер -->
+<!-- ГЛАВНЫЙ БАННЕР -->
 
 <section class="hero">
-
   <h1>Мерч для тех, кто любит океан</h1>
 
   <p>
@@ -317,19 +299,14 @@ footer {
   <a class="hero-button" href="#catalog">
     Смотреть коллекцию
   </a>
-
 </section>
 
 <main>
 
-  <!-- Категории -->
+  <!-- ОСНОВНЫЕ КАТЕГОРИИ -->
 
   <section id="catalog">
-
-    <h2 class="section-title">
-      Наши коллекции
-    </h2>
-
+    <h2 class="section-title">Наши коллекции</h2>
     <p class="section-description">
       Выберите категорию товаров
     </p>
@@ -337,24 +314,22 @@ footer {
     <div id="categories" class="categories">
       Загружаем категории...
     </div>
-
   </section>
 
-  <!-- Сюда автоматически добавится Наш выбор -->
-
-  <!-- О клубе -->
+  <!--
+    НОВИНКИ И НАШ ВЫБОР
+    добавляются автоматически перед блоком О клубе.
+    Если товаров нет — блок не создаётся.
+  -->
 
   <section class="about">
-
     <h2>Клуб «5 океанов»</h2>
-
     <p>
       Мы исследуем океаны, путешествуем
       под парусом и делимся любовью к морю.
       Наш мерч — небольшая часть большого
       экспедиционного приключения.
     </p>
-
   </section>
 
 </main>
@@ -365,39 +340,29 @@ footer {
 
 <script>
 
-/* ==========================================
-   ОБЩИЕ ФУНКЦИИ
-========================================== */
+/* ОБЩИЕ ФУНКЦИИ */
 
 function makeElement(tag, className, text) {
-
-  const el = document.createElement(tag);
+  const node = document.createElement(tag);
 
   if (className) {
-    el.className = className;
+    node.className = className;
   }
 
   if (text !== undefined) {
-    el.textContent = text;
+    node.textContent = text;
   }
 
-  return el;
+  return node;
 }
 
-/* Сравнение категорий */
-
 function normalize(value) {
-
   return String(value || "")
     .trim()
     .toLowerCase();
-
 }
 
-/* Формат цены */
-
 function formatPrice(price) {
-
   if (
     price === null ||
     price === undefined ||
@@ -411,13 +376,9 @@ function formatPrice(price) {
     currency: "RUB",
     maximumFractionDigits: 0
   }).format(Number(price));
-
 }
 
-/* Правильное склонение количества товаров */
-
 function getProductCount(n) {
-
   const mod10 = n % 10;
   const mod100 = n % 100;
 
@@ -434,35 +395,191 @@ function getProductCount(n) {
   }
 
   return n + " товаров";
-
 }
 
-/* ==========================================
-   ЗАГРУЗКА КАТЕГОРИЙ
-========================================== */
+/* СОЗДАНИЕ КАРТОЧКИ КАТЕГОРИИ */
 
-async function loadCategories() {
+function createCategoryCard(category, products) {
 
-  const container = document.getElementById(
-    "categories"
+  const matching = products.filter(p =>
+    normalize(p.category) === normalize(category.id)
   );
+
+  const link = makeElement("a", "category");
+
+  link.href = "/category.html?slug=" +
+    encodeURIComponent(category.slug);
+
+  const cover = makeElement("div", "category-cover");
+
+  const exampleProduct = matching.find(p =>
+    Array.isArray(p.photos) &&
+    p.photos.length > 0
+  );
+
+  const photo =
+    category.image || exampleProduct?.photos?.[0];
+
+  if (photo) {
+    const img = document.createElement("img");
+    img.src = photo;
+    img.alt = category.title;
+    img.loading = "lazy";
+    cover.appendChild(img);
+  } else {
+    cover.appendChild(
+      makeElement("div", "fallback", "5 ОКЕАНОВ")
+    );
+  }
+
+  const info = makeElement("div", "category-info");
+
+  info.appendChild(
+    makeElement("h3", "", category.title)
+  );
+
+  if (category.description) {
+    info.appendChild(
+      makeElement("p", "", category.description)
+    );
+  }
+
+  info.appendChild(
+    makeElement(
+      "div",
+      "count",
+      matching.length
+        ? getProductCount(matching.length)
+        : "Пока нет товаров"
+    )
+  );
+
+  info.appendChild(
+    makeElement(
+      "div",
+      "open-category",
+      "Смотреть товары →"
+    )
+  );
+
+  link.append(cover, info);
+  return link;
+}
+
+/* СОЗДАНИЕ КАРТОЧКИ ТОВАРА */
+
+function createProductCard(product, categories) {
+
+  const card = makeElement("a", "category");
+
+  const category = categories.find(c =>
+    normalize(c.id) === normalize(product.category)
+  );
+
+  if (product.slug) {
+    card.href = "/product.html?slug=" +
+      encodeURIComponent(product.slug);
+  } else if (category) {
+    card.href = "/category.html?slug=" +
+      encodeURIComponent(category.slug);
+  } else {
+    card.href = "#catalog";
+  }
+
+  const cover = makeElement("div", "category-cover");
+
+  const photos = Array.isArray(product.photos)
+    ? product.photos.filter(Boolean)
+    : [];
+
+  if (photos.length) {
+    const img = document.createElement("img");
+    img.src = photos[0];
+    img.alt = product.title || "Товар";
+    img.loading = "lazy";
+    cover.appendChild(img);
+  } else {
+    cover.appendChild(
+      makeElement("div", "fallback", "5 ОКЕАНОВ")
+    );
+  }
+
+  const info = makeElement("div", "category-info");
+
+  info.appendChild(
+    makeElement("h3", "", product.title || "Товар")
+  );
+
+  info.appendChild(
+    makeElement("h3", "", formatPrice(product.price))
+  );
+
+  info.appendChild(
+    makeElement(
+      "div",
+      "open-category",
+      product.slug
+        ? "Подробнее о товаре →"
+        : "Смотреть категорию →"
+    )
+  );
+
+  card.append(cover, info);
+  return card;
+}
+
+/* СОЗДАНИЕ РАЗДЕЛА ТОВАРОВ */
+
+function createShowcase(id, title, description, items, categories) {
+
+  // Если нет товаров — не создаём ни заголовок,
+  // ни секцию, ни отступы.
+  if (!items.length) return null;
+
+  const section = makeElement("section", "showcase");
+  section.id = id;
+
+  section.appendChild(
+    makeElement("h2", "section-title", title)
+  );
+
+  section.appendChild(
+    makeElement("p", "section-description", description)
+  );
+
+  const grid = makeElement("div", "categories");
+
+  items.forEach(product => {
+    grid.appendChild(
+      createProductCard(product, categories)
+    );
+  });
+
+  section.appendChild(grid);
+
+  return section;
+}
+
+/* ЗАГРУЗКА ГЛАВНОЙ СТРАНИЦЫ */
+
+async function loadHomepage() {
+
+  const categoryContainer =
+    document.getElementById("categories");
 
   try {
 
     const responses = await Promise.all([
-
       fetch("/data/categories.json", {
         cache: "no-store"
       }),
-
       fetch("/data/products.json", {
         cache: "no-store"
       })
-
     ]);
 
     if (responses.some(r => !r.ok)) {
-      throw new Error("Ошибка загрузки");
+      throw new Error("Ошибка загрузки данных");
     }
 
     const [categories, products] =
@@ -470,358 +587,96 @@ async function loadCategories() {
         responses.map(r => r.json())
       );
 
-    if (!Array.isArray(categories) ||
-        !Array.isArray(products)) {
-      throw new Error("Неверный формат данных");
+    if (
+      !Array.isArray(categories) ||
+      !Array.isArray(products)
+    ) {
+      throw new Error("Неверный формат каталога");
     }
 
-    container.replaceChildren();
+    /* 1. ОСНОВНЫЕ КАТЕГОРИИ */
+
+    categoryContainer.replaceChildren();
 
     if (!categories.length) {
-      container.textContent =
+      categoryContainer.textContent =
         "Категории скоро появятся.";
-      return;
-    }
-
-    /* Создание карточек категорий */
-
-    categories.forEach(category => {
-
-      const matching = products.filter(p =>
-        normalize(p.category) ===
-        normalize(category.id)
-      );
-
-      const link = makeElement(
-        "a",
-        "category"
-      );
-
-      link.href = "/category.html?slug=" +
-        encodeURIComponent(category.slug);
-
-      /* Изображение категории */
-
-      const cover = makeElement(
-        "div",
-        "category-cover"
-      );
-
-      const exampleProduct = matching.find(p =>
-        Array.isArray(p.photos) &&
-        p.photos.length > 0
-      );
-
-      const examplePhoto =
-        exampleProduct?.photos?.[0];
-
-      const photo = category.image || examplePhoto;
-
-      if (photo) {
-
-        const img = document.createElement("img");
-
-        img.src = photo;
-        img.alt = category.title;
-        img.loading = "lazy";
-
-        cover.appendChild(img);
-
-      } else {
-
-        cover.appendChild(
-          makeElement(
-            "div",
-            "fallback",
-            "5 ОКЕАНОВ"
-          )
+    } else {
+      categories.forEach(category => {
+        categoryContainer.appendChild(
+          createCategoryCard(category, products)
         );
-
-      }
-
-      /* Информация категории */
-
-      const info = makeElement(
-        "div",
-        "category-info"
-      );
-
-      info.appendChild(
-        makeElement(
-          "h3",
-          "",
-          category.title
-        )
-      );
-
-      if (category.description) {
-
-        info.appendChild(
-          makeElement(
-            "p",
-            "",
-            category.description
-          )
-        );
-
-      }
-
-      info.appendChild(
-        makeElement(
-          "div",
-          "count",
-          matching.length
-            ? getProductCount(matching.length)
-            : "Пока нет товаров"
-        )
-      );
-
-      info.appendChild(
-        makeElement(
-          "div",
-          "open-category",
-          "Смотреть товары →"
-        )
-      );
-
-      link.appendChild(cover);
-      link.appendChild(info);
-
-      container.appendChild(link);
-
-    });
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка загрузки категорий:",
-      error
-    );
-
-    container.textContent =
-      "Не удалось загрузить категории.";
-
-  }
-
-}
-
-/* ==========================================
-   РАЗДЕЛ НАШ ВЫБОР
-========================================== */
-
-async function loadFeaturedProducts() {
-
-  try {
-
-    /* Загружаем товары и категории */
-
-    const responses = await Promise.all([
-
-      fetch("/data/products.json", {
-        cache: "no-store"
-      }),
-
-      fetch("/data/categories.json", {
-        cache: "no-store"
-      })
-
-    ]);
-
-    if (responses.some(r => !r.ok)) {
-      throw new Error("Ошибка загрузки товаров");
+      });
     }
 
-    const [products, categories] =
-      await Promise.all(
-        responses.map(r => r.json())
-      );
+    /* 2. ОТБИРАЕМ НОВИНКИ */
 
-    if (!Array.isArray(products) ||
-        !Array.isArray(categories)) {
-      throw new Error("Неверный формат данных");
-    }
-
-    /* Берём товары с отметкой Наш выбор */
-
-    const featured = products.filter(product =>
-      product.featured === true &&
-      product.available === true
+    const newProducts = products.filter(p =>
+      p.new_arrival === true &&
+      p.available === true
     );
 
-    /* Если таких товаров нет, блок не показываем */
+    /* 3. ОТБИРАЕМ НАШ ВЫБОР */
 
-    if (!featured.length) {
-      return;
-    }
-
-    /* Создаём раздел */
-
-    const section = makeElement("section");
-
-    section.id = "featured";
-
-    const title = makeElement(
-      "h2",
-      "section-title",
-      "Наш выбор"
+    const featuredProducts = products.filter(p =>
+      p.featured === true &&
+      p.available === true
     );
 
-    const subtitle = makeElement(
-      "p",
-      "section-description",
-      "Товары, которые мы особенно рекомендуем"
-    );
-
-    const grid = makeElement(
-      "div",
-      "categories"
-    );
-
-    /* Карточки рекомендованных товаров */
-
-    featured.forEach(product => {
-
-      const category = categories.find(c =>
-        normalize(c.id) ===
-        normalize(product.category)
-      );
-
-      const card = makeElement(
-        "a",
-        "category"
-      );
-
-      /*
-        ВАЖНО:
-        Переход на конкретную страницу товара.
-        Если slug товара отсутствует,
-        переход на категорию.
-      */
-
-      if (product.slug) {
-
-        card.href = "/product.html?slug=" +
-          encodeURIComponent(product.slug);
-
-      } else if (category) {
-
-        card.href = "/category.html?slug=" +
-          encodeURIComponent(category.slug);
-
-      } else {
-
-        card.href = "#catalog";
-
-      }
-
-      /* Фотография товара */
-
-      const cover = makeElement(
-        "div",
-        "category-cover"
-      );
-
-      const photos = Array.isArray(product.photos)
-        ? product.photos.filter(Boolean)
-        : [];
-
-      if (photos.length > 0) {
-
-        const img = document.createElement("img");
-
-        img.src = photos[0];
-        img.alt = product.title;
-        img.loading = "lazy";
-
-        cover.appendChild(img);
-
-      } else {
-
-        cover.appendChild(
-          makeElement(
-            "div",
-            "fallback",
-            "5 ОКЕАНОВ"
-          )
-        );
-
-      }
-
-      /* Название, цена и ссылка */
-
-      const info = makeElement(
-        "div",
-        "category-info"
-      );
-
-      info.appendChild(
-        makeElement(
-          "h3",
-          "",
-          product.title || "Товар"
-        )
-      );
-
-      info.appendChild(
-        makeElement(
-          "h3",
-          "",
-          formatPrice(product.price)
-        )
-      );
-
-      info.appendChild(
-        makeElement(
-          "div",
-          "open-category",
-          product.slug
-            ? "Подробнее о товаре →"
-            : "Смотреть категорию →"
-        )
-      );
-
-      card.appendChild(cover);
-      card.appendChild(info);
-
-      grid.appendChild(card);
-
-    });
-
-    section.appendChild(title);
-    section.appendChild(subtitle);
-    section.appendChild(grid);
-
-    /* Размещаем блок перед разделом О клубе */
+    /* 4. СОЗДАЁМ БЛОКИ В НУЖНОМ ПОРЯДКЕ */
 
     const main = document.querySelector("main");
-
     const about = main.querySelector(".about");
 
-    main.insertBefore(section, about);
+    const newSection = createShowcase(
+      "new-arrivals",
+      "Новинки",
+      "Новые поступления нашего мерча",
+      newProducts,
+      categories
+    );
+
+    const featuredSection = createShowcase(
+      "featured",
+      "Наш выбор",
+      "Товары, которые мы особенно рекомендуем",
+      featuredProducts,
+      categories
+    );
+
+    /*
+      Вставляем Новинки, затем Наш выбор.
+      Если раздел пустой, createShowcase
+      возвращает null, и он не добавляется.
+    */
+
+    if (newSection) {
+      main.insertBefore(newSection, about);
+    }
+
+    if (featuredSection) {
+      main.insertBefore(featuredSection, about);
+    }
 
   } catch (error) {
 
-    console.error(
-      "Ошибка блока Наш выбор:",
-      error
-    );
+    console.error("Ошибка загрузки магазина:", error);
 
+    categoryContainer.textContent =
+      "Не удалось загрузить каталог.";
   }
-
 }
 
-/* ==========================================
-   ЗАПУСК
-========================================== */
+/* ЗАПУСК */
 
-
-loadCategories();
-
-loadFeaturedProducts();
+loadHomepage();
 
 </script>
+
+<!-- ЕДИНАЯ КОРЗИНА -->
 
 <script src="/cart-nav.js" defer></script>
 
 </body>
 </html>
+
