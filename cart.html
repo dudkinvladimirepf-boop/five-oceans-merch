@@ -306,7 +306,7 @@ button {
       type="button"
       disabled
     >
-      Оформить через Telegram
+      Создать заказ и открыть Telegram
     </button>
 
     <div class="actions">
@@ -317,7 +317,7 @@ button {
         type="button"
         disabled
       >
-        Скопировать заказ
+        Создать заказ и скопировать
       </button>
 
       <a
@@ -337,11 +337,11 @@ button {
        aria-live="polite"></p>
 
     <p class="note">
-      После перехода в Telegram вставьте
-      скопированный текст в переписку
-      и нажмите «Отправить».
-      Заказ считается направленным
-      только после отправки сообщения.
+      При нажатии на кнопку оформления заказ сначала
+      сохраняется в системе и получает номер.
+      Затем вставьте текст с этим номером в Telegram
+      и отправьте сообщение магазину.
+      Создание заказа не резервирует товар.
     </p>
 
   </section>
@@ -353,54 +353,37 @@ button {
 </main>
 
 <script>
+/*
+  Корзина Клуба «5 океанов».
+  Оформление создаёт реальный заказ в Cloudflare D1.
+  Номер заказа передаётся клиентом в Telegram.
+*/
 
 const CART_KEY = "five-oceans-cart-v1";
+const CHECKOUT_KEY = "five-oceans-checkout-v1";
+const TELEGRAM_URL = "https://t.me/okeanhd_5oceans_shop?direct";
 
-const TELEGRAM_URL =
-  "https://t.me/okeanhd_5oceans_shop?direct";
-
-const cartContainer =
-  document.getElementById("cart");
-
-const summary =
-  document.getElementById("summary");
-
-const checkout =
-  document.getElementById("checkout");
-
-const orderPreview =
-  document.getElementById("order-preview");
-
-const telegramButton =
-  document.getElementById("telegram-order");
-
-const copyButton =
-  document.getElementById("copy-order");
-
-const orderStatus =
-  document.getElementById("order-status");
+const cartContainer = document.getElementById("cart");
+const summary = document.getElementById("summary");
+const checkout = document.getElementById("checkout");
+const orderPreview = document.getElementById("order-preview");
+const telegramButton = document.getElementById("telegram-order");
+const copyButton = document.getElementById("copy-order");
+const orderStatus = document.getElementById("order-status");
 
 let cart = [];
 let products = [];
 let orderItems = [];
-
-/* СОЗДАНИЕ ЭЛЕМЕНТОВ */
+let currentOrder = null;
+let canCheckout = false;
+let submitting = false;
 
 function el(tag, text, className) {
   const node = document.createElement(tag);
-
-  if (text !== undefined) {
-    node.textContent = text;
-  }
-
-  if (className) {
-    node.className = className;
-  }
-
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
   return node;
 }
-
-/* ДЕНЬГИ */
 
 function money(value) {
   return new Intl.NumberFormat("ru-RU", {
@@ -410,133 +393,178 @@ function money(value) {
   }).format(value);
 }
 
-/* СОХРАНЕНИЕ КОРЗИНЫ */
-
 function saveCart() {
   try {
-    localStorage.setItem(
-      CART_KEY,
-      JSON.stringify(cart)
-    );
-
-    window.dispatchEvent(
-      new Event("five-oceans-cart-updated")
-    );
-
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    window.dispatchEvent(new Event("five-oceans-cart-updated"));
     return true;
-
   } catch (error) {
     alert("Не удалось сохранить корзину.");
     return false;
   }
 }
 
-/* ФОРМИРОВАНИЕ ТЕКСТА ЗАКАЗА */
+/*
+  Фиксируем состав корзины. Если количество или размер
+  изменились, следующее оформление получит новый ключ.
+  Один и тот же ключ защищает от случайных дублей.
+*/
+function cartFingerprint() {
+  const normalized = cart.map(item => ({
+    slug: String(item.slug || ""),
+    size: String(item.size || ""),
+    quantity: Number(item.quantity)
+  }));
 
-function buildOrderText() {
+  normalized.sort((a, b) => {
+    const first = JSON.stringify([a.slug, a.size]);
+    const second = JSON.stringify([b.slug, b.size]);
+    return first < second ? -1 : first > second ? 1 : 0;
+  });
 
+  return JSON.stringify(normalized);
+}
+
+function newCheckoutUuid() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+
+  const h = [...bytes].map(x => x.toString(16).padStart(2, "0"));
+  return h.slice(0, 4).join("") + "-" +
+    h.slice(4, 6).join("") + "-" +
+    h.slice(6, 8).join("") + "-" +
+    h.slice(8, 10).join("") + "-" +
+    h.slice(10).join("");
+}
+
+function checkoutKeyFor(fingerprint) {
+  let stored = null;
+
+  try {
+    stored = JSON.parse(localStorage.getItem(CHECKOUT_KEY) || "null");
+  } catch {
+    stored = null;
+  }
+
+  if (
+    stored &&
+    stored.fingerprint === fingerprint &&
+    typeof stored.key === "string"
+  ) {
+    return stored.key;
+  }
+
+  const key = newCheckoutUuid();
+
+  // Если ключ нельзя сохранить, не создаём заказ:
+  // иначе повторное нажатие может создать дубль.
+  localStorage.setItem(
+    CHECKOUT_KEY,
+    JSON.stringify({ fingerprint, key })
+  );
+
+  return key;
+}
+
+function composeOrderText(items, number) {
   const lines = [
     "Здравствуйте! Хочу заказать мерч Клуба «5 океанов».",
+    "",
+    number
+      ? "Номер заказа: " + number
+      : "Номер заказа: будет присвоен после оформления",
     ""
   ];
 
   let total = 0;
 
-  orderItems.forEach((item, index) => {
-
-    const subtotal =
-      item.price * item.quantity;
-
+  items.forEach((item, index) => {
+    const price = Number(
+      item.unit_price !== undefined ? item.unit_price : item.price
+    );
+    const quantity = Number(item.quantity);
+    const subtotal = price * quantity;
     total += subtotal;
 
-    lines.push(
-      (index + 1) + ". " + item.title
-    );
+    lines.push(String(index + 1) + ". " + item.title);
 
     if (item.size) {
       lines.push("Размер: " + item.size);
     }
 
-    lines.push(
-      "Количество: " + item.quantity + " шт."
-    );
-
-    lines.push(
-      "Цена: " + money(item.price) + "/шт."
-    );
-
-    lines.push(
-      "Сумма: " + money(subtotal)
-    );
-
+    lines.push("Количество: " + quantity + " шт.");
+    lines.push("Цена: " + money(price) + "/шт.");
+    lines.push("Сумма: " + money(subtotal));
     lines.push("");
-
   });
 
-  lines.push(
-    "Итого по товарам: " + money(total)
-  );
-
-  lines.push(
-    "Доставка: уточняется."
-  );
-
+  lines.push("Итого по товарам: " + money(total));
+  lines.push("Доставка: уточняется.");
   lines.push("");
-
-  lines.push(
-    "Пожалуйста, подтвердите наличие " +
-    "и итоговую стоимость."
-  );
+  lines.push("Пожалуйста, подтвердите наличие и итоговую стоимость.");
 
   return lines.join("\n");
 }
 
-/* ОБНОВЛЕНИЕ ПРЕДПРОСМОТРА */
-
 function updateOrderPreview(hasUnavailable) {
-
   checkout.hidden = cart.length === 0;
 
   if (!cart.length) {
     orderPreview.value = "";
+    canCheckout = false;
     telegramButton.disabled = true;
     copyButton.disabled = true;
     return;
   }
 
-  const canOrder =
+  canCheckout =
     !hasUnavailable &&
-    orderItems.length === cart.length;
+    orderItems.length === cart.length &&
+    orderItems.length > 0;
 
-  telegramButton.disabled = !canOrder;
-  copyButton.disabled = !canOrder;
+  telegramButton.disabled = !canCheckout || submitting;
+  copyButton.disabled = !canCheckout || submitting;
 
-  if (!canOrder) {
+  const fingerprint = cartFingerprint();
+  const existing = currentOrder &&
+    currentOrder.fingerprint === fingerprint
+      ? currentOrder.response
+      : null;
+
+  telegramButton.textContent = existing
+    ? "Скопировать и открыть Telegram"
+    : "Создать заказ и открыть Telegram";
+
+  copyButton.textContent = existing
+    ? "Скопировать заказ"
+    : "Создать заказ и скопировать";
+
+  if (!canCheckout) {
     orderPreview.value =
       "В корзине есть недоступные позиции. " +
-      "Удалите их или измените заказ, " +
-      "чтобы продолжить оформление.";
-
+      "Удалите их или измените заказ, чтобы продолжить оформление.";
     return;
   }
 
-  orderPreview.value = buildOrderText();
+  orderPreview.value = existing
+    ? composeOrderText(existing.items, existing.order_id)
+    : composeOrderText(orderItems, null);
 }
 
-/* ОТОБРАЖЕНИЕ КОРЗИНЫ */
-
 function renderCart() {
-
   cartContainer.replaceChildren();
   summary.replaceChildren();
-
   orderItems = [];
   orderStatus.textContent = "";
 
   if (!cart.length) {
-    cartContainer.textContent =
-      "Корзина пока пуста.";
-
+    cartContainer.textContent = "Корзина пока пуста.";
     updateOrderPreview(false);
     return;
   }
@@ -545,130 +573,83 @@ function renderCart() {
   let hasUnavailable = false;
 
   cart.forEach((item, index) => {
-
-    const product = products.find(p =>
-      p.slug === item.slug
-    );
-
+    const product = products.find(p => p.slug === item.slug);
     const row = el("div", undefined, "item");
 
     if (!product) {
-
-      row.appendChild(
-        el("p", "Товар больше не найден в каталоге.")
-      );
-
+      row.appendChild(el("p", "Товар больше не найден в каталоге."));
       hasUnavailable = true;
-
     } else {
-
-      /* Фотография */
-
       const photo = product.photos?.[0];
 
       if (photo) {
         const img = document.createElement("img");
-
         img.src = photo;
         img.alt = product.title || "Товар";
-
         row.appendChild(img);
       }
 
-      const details =
-        el("div", undefined, "details");
-
-      details.appendChild(
-        el("h3", product.title || "Товар")
-      );
+      const details = el("div", undefined, "details");
+      details.appendChild(el("h3", product.title || "Товар"));
 
       if (item.size) {
-        details.appendChild(
-          el("p", "Размер: " + item.size)
-        );
+        details.appendChild(el("p", "Размер: " + item.size));
       }
 
-      /* Проверяем наличие размера */
-
       const sizes = Array.isArray(product.sizes)
-        ? product.sizes.map(String)
+        ? product.sizes.map(String).filter(Boolean)
         : [];
 
-      const sizeValid = !sizes.length ||
-        sizes.includes(String(item.size));
+      // Размер должен точно соответствовать каталогу.
+      const sizeValid = sizes.length
+        ? sizes.includes(String(item.size || ""))
+        : !String(item.size || "");
 
-      const available =
-        product.available === true &&
-        sizeValid;
+      const available = product.available === true && sizeValid;
 
       const price = Number(product.price);
-
       const priceValid =
         product.price !== null &&
         product.price !== undefined &&
         product.price !== "" &&
-        Number.isFinite(price) &&
+        Number.isSafeInteger(price) &&
         price >= 0;
 
       const quantity = Math.max(
         1,
-        Math.min(
-          99,
-          Math.trunc(Number(item.quantity) || 1)
-        )
+        Math.min(99, Math.trunc(Number(item.quantity) || 1))
       );
 
       item.quantity = quantity;
 
-      /* Стоимость */
-
       if (available && priceValid) {
-
         const subtotal = price * quantity;
-
         total += subtotal;
 
         details.appendChild(
-          el(
-            "p",
-            "Стоимость: " + money(subtotal),
-            "price"
-          )
+          el("p", "Стоимость: " + money(subtotal), "price")
         );
 
         orderItems.push({
-          title: product.title,
-          size: item.size,
-          quantity: quantity,
-          price: price
+          slug: String(product.slug),
+          title: String(product.title || product.slug),
+          size: String(item.size || ""),
+          quantity,
+          price
         });
-
       } else {
-
         hasUnavailable = true;
-
         details.appendChild(
-          el(
-            "p",
-            "Товар, размер или цена недоступны.",
-            "warning"
-          )
+          el("p", "Товар, размер или цена недоступны.", "warning")
         );
       }
 
       row.appendChild(details);
 
-      /* Количество */
-
       const qtyBox = el("div");
+      qtyBox.appendChild(el("p", "Количество:"));
 
-      qtyBox.appendChild(
-        el("p", "Количество:")
-      );
-
-      const qtyInput =
-        document.createElement("input");
-
+      const qtyInput = document.createElement("input");
       qtyInput.type = "number";
       qtyInput.min = "1";
       qtyInput.max = "99";
@@ -677,7 +658,6 @@ function renderCart() {
       qtyInput.className = "quantity";
 
       qtyInput.addEventListener("change", () => {
-
         const value = Number(qtyInput.value);
 
         if (
@@ -685,14 +665,14 @@ function renderCart() {
           value < 1 ||
           value > 99
         ) {
-          qtyInput.value =
-            String(item.quantity);
+          qtyInput.value = String(item.quantity);
           return;
         }
 
         item.quantity = value;
 
         if (saveCart()) {
+          currentOrder = null;
           renderCart();
         }
       });
@@ -701,37 +681,26 @@ function renderCart() {
       row.appendChild(qtyBox);
     }
 
-    /* Удаление товара */
-
-    const remove = el(
-      "button",
-      "Удалить",
-      "remove"
-    );
-
+    const remove = el("button", "Удалить", "remove");
     remove.type = "button";
 
     remove.addEventListener("click", () => {
-
       cart.splice(index, 1);
 
       if (saveCart()) {
+        currentOrder = null;
         renderCart();
       }
     });
 
     row.appendChild(remove);
     cartContainer.appendChild(row);
-
   });
-
-  /* Общая сумма */
 
   summary.appendChild(
     el(
       "div",
-      "Итого по доступным товарам: " +
-        money(total),
+      "Итого по доступным товарам: " + money(total),
       "total"
     )
   );
@@ -759,103 +728,159 @@ function renderCart() {
   updateOrderPreview(hasUnavailable);
 }
 
-/* КОПИРОВАНИЕ ТЕКСТА */
+/* СЕРВЕРНОЕ СОЗДАНИЕ ЗАКАЗА */
 
-async function copyOrderText() {
+async function createOrder() {
+  const fingerprint = cartFingerprint();
 
+  if (
+    currentOrder &&
+    currentOrder.fingerprint === fingerprint
+  ) {
+    return currentOrder.response;
+  }
+
+  const checkoutKey = checkoutKeyFor(fingerprint);
+
+  const payload = {
+    checkout_key: checkoutKey,
+    items: orderItems.map(item => ({
+      slug: item.slug,
+      size: item.size,
+      quantity: item.quantity
+    }))
+  };
+
+  let response;
+  let result;
+
+  try {
+    response = await fetch("/api/orders/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    result = await response.json();
+  } catch {
+    throw new Error(
+      "Нет связи с сервером заказов. " +
+      "Повторите попытку — дубликат не создастся."
+    );
+  }
+
+  if (!response.ok || !result?.success) {
+    throw new Error(
+      result?.error || "Не удалось зарегистрировать заказ."
+    );
+  }
+
+  if (
+    typeof result.order_id !== "string" ||
+    !Array.isArray(result.items) ||
+    !Number.isSafeInteger(Number(result.total))
+  ) {
+    throw new Error("Сервер вернул некорректные данные заказа.");
+  }
+
+  if (fingerprint !== cartFingerprint()) {
+    throw new Error(
+      "Корзина изменилась во время оформления. " +
+      "Проверьте состав и оформите её заново."
+    );
+  }
+
+  currentOrder = { fingerprint, response: result };
+  return result;
+}
+
+/* КОПИРОВАНИЕ УЖЕ ЗАРЕГИСТРИРОВАННОГО ЗАКАЗА */
+
+async function copyRegisteredOrder() {
   const text = orderPreview.value;
 
-  if (!text || telegramButton.disabled) {
+  if (!currentOrder || !text) {
     return false;
   }
 
   try {
-    if (navigator.clipboard &&
-        window.isSecureContext) {
-
+    if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
       return true;
     }
-
   } catch (error) {
-    console.warn(
-      "Не удалось скопировать через Clipboard API",
-      error
-    );
+    console.warn("Clipboard API недоступен", error);
   }
-
-  /* Резервный способ */
 
   try {
     orderPreview.focus();
     orderPreview.select();
-
     return document.execCommand("copy");
-
-  } catch (error) {
+  } catch {
     return false;
   }
 }
 
-/* КНОПКА КОПИРОВАНИЯ */
+async function handleCheckout(openTelegram) {
+  if (!canCheckout || submitting) return;
 
-copyButton.addEventListener("click", async () => {
+  submitting = true;
+  updateOrderPreview(false);
 
-  const copied = await copyOrderText();
+  orderStatus.textContent =
+    "Проверяем остатки и регистрируем заказ...";
 
-  if (copied) {
-    orderStatus.textContent =
-      "Заказ скопирован. Теперь откройте Telegram, " +
-      "вставьте сообщение и отправьте его.";
-  } else {
-    orderPreview.focus();
-    orderPreview.select();
+  try {
+    const order = await createOrder();
+    updateOrderPreview(false);
 
-    orderStatus.textContent =
-      "Автоматическое копирование недоступно. " +
-      "Скопируйте выделенный текст вручную.";
-  }
-
-});
-
-/* ОФОРМЛЕНИЕ ЧЕРЕЗ TELEGRAM */
-
-telegramButton.addEventListener(
-  "click",
-  async () => {
-
-    const copied = await copyOrderText();
+    const copied = await copyRegisteredOrder();
 
     if (!copied) {
-
       orderPreview.focus();
       orderPreview.select();
 
       orderStatus.textContent =
-        "Браузер не разрешил скопировать заказ. " +
-        "Скопируйте текст вручную, затем нажмите " +
-        "«Открыть чат магазина».";
-
+        "Заказ № " + order.order_id +
+        " создан в системе, но браузер не разрешил " +
+        "копирование. Скопируйте выделенный текст " +
+        "вручную и откройте чат магазина.";
       return;
     }
 
     orderStatus.textContent =
-      "Заказ скопирован. В Telegram вставьте " +
-      "текст и нажмите «Отправить».";
+      "Заказ № " + order.order_id +
+      " создан и скопирован. В Telegram вставьте " +
+      "сообщение и нажмите «Отправить».";
 
-    /* Открываем личные сообщения канала */
-
-    window.location.assign(TELEGRAM_URL);
-
+    if (openTelegram) {
+      window.location.assign(TELEGRAM_URL);
+    }
+  } catch (error) {
+    orderStatus.textContent =
+      error?.message || "Не удалось оформить заказ.";
+  } finally {
+    submitting = false;
+    updateOrderPreview(
+      orderItems.length !== cart.length
+    );
   }
-);
+}
+
+copyButton.addEventListener("click", () => {
+  handleCheckout(false);
+});
+
+telegramButton.addEventListener("click", () => {
+  handleCheckout(true);
+});
 
 /* ЗАГРУЗКА */
 
 async function init() {
-
   try {
-
     const saved = JSON.parse(
       localStorage.getItem(CART_KEY) || "[]"
     );
@@ -878,18 +903,14 @@ async function init() {
     }
 
     renderCart();
-
   } catch (error) {
-
     cartContainer.textContent =
       "Не удалось загрузить корзину.";
-
     console.error(error);
   }
 }
 
 init();
-
 </script>
 
 <script src="/cart-nav.js" defer></script>
