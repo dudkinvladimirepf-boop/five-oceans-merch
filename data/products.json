@@ -1,8 +1,12 @@
 [
   {
     "title": "Футболка Конюхов",
+    "description": "футболка с надписью и тд",
     "price": 2800,
     "category": "футболки",
+    "photos": [
+      "/media/logo5oceanscoloreng.jpg"
+    ],
     "sizes": [
       "52-54",
       "L"
