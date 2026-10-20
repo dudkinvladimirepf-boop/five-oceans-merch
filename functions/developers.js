@@ -296,6 +296,130 @@ async function excludedRows(env) {
   return result.results || [];
 }
 
+async function recentOrders(env) {
+  const result = await database(env).prepare(
+    `SELECT
+       o.order_id,
+       o.status,
+       o.created_at,
+       o.updated_at,
+       i.product_slug,
+       i.product_title,
+       i.size,
+       i.quantity,
+       i.unit_price
+     FROM (
+       SELECT order_id, status, created_at, updated_at
+       FROM orders
+       ORDER BY created_at DESC, order_id DESC
+       LIMIT 100
+     ) AS o
+     LEFT JOIN order_items AS i
+       ON i.order_id = o.order_id
+     ORDER BY o.created_at DESC, o.order_id DESC,
+              i.product_slug, i.size`
+  ).all();
+
+  const orders = [];
+  const byId = new Map();
+  for (const row of result.results || []) {
+    let order = byId.get(row.order_id);
+    if (!order) {
+      order = {
+        order_id: row.order_id, status: row.status,
+        created_at: row.created_at, updated_at: row.updated_at,
+        items: [], total: 0
+      };
+      orders.push(order);
+      byId.set(row.order_id, order);
+    }
+    if (row.product_slug !== null && row.product_slug !== undefined) {
+      const quantity = Number(row.quantity);
+      const unitPrice = Number(row.unit_price);
+      const sum = quantity * unitPrice;
+      order.items.push({
+        title: row.product_title, slug: row.product_slug,
+        size: row.size, quantity, unit_price: unitPrice, total: sum
+      });
+      order.total += sum;
+    }
+  }
+  return orders;
+}
+
+function moneyRub(amount) { return number(amount) + " ₽"; }
+
+function orderStatusLabel(status) {
+  const known = {
+    pending: "Новый", reserved: "В резерве",
+    sold: "Оплачен", cancelled: "Отменён",
+    expired: "Истёк"
+  };
+  return known[status] || String(status || "Неизвестен");
+}
+
+function renderOrders(orders) {
+  if (!orders.length) {
+    return '<p class="muted">Оформленных заказов пока нет.</p>';
+  }
+  return orders.map(order => {
+    const status = String(order.status || "pending");
+    const cssStatus = [
+      "pending", "reserved", "sold", "cancelled", "expired"
+    ].includes(status) ? status : "unknown";
+
+    const rows = order.items.map(item => `
+      <tr>
+        <td>
+          <strong>${esc(item.title || item.slug)}</strong>
+          <small>${esc(item.slug)}</small>
+        </td>
+        <td>${esc(item.size || "Без размера")}</td>
+        <td class="num">${number(item.quantity)}</td>
+        <td class="num">${moneyRub(item.unit_price)}</td>
+        <td class="num">${moneyRub(item.total)}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <details class="order-card">
+        <summary class="order-summary">
+          <span class="order-title">${esc(order.order_id)}</span>
+          <span class="status-pill status-${cssStatus}">
+            ${esc(orderStatusLabel(status))}
+          </span>
+          <span class="order-meta">
+            ${esc(String(order.created_at || ""))} UTC
+          </span>
+          <strong class="order-total">${moneyRub(order.total)}</strong>
+        </summary>
+        <div class="order-body">
+          <p class="muted">
+            Позиции и цены сохранены при оформлении.
+            Заказ не резервирует товары до действия администратора.
+          </p>
+          <div class="table-wrap">
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th>Товар</th><th>Размер</th>
+                  <th class="num">Штук</th>
+                  <th class="num">Цена</th><th class="num">Сумма</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div class="order-bottom">
+            <span>${number(order.items.length)} позиций</span>
+            <strong>Итого: ${moneyRub(order.total)}</strong>
+          </div>
+        </div>
+      </details>
+    `;
+  }).join("");
+}
+
 /* РУЧНАЯ СИНХРОНИЗАЦИЯ */
 
 async function syncCatalog(context) {
@@ -939,6 +1063,7 @@ async function dashboard(context, secret, options = {}) {
   let stock = [];
   let excluded = [];
   let products = [];
+  let orders = [];
   const problems = [];
 
   try {
@@ -956,6 +1081,13 @@ async function dashboard(context, secret, options = {}) {
   } catch (error) {
     console.error(error);
     problems.push("Не удалось прочитать каталог Pages CMS.");
+  }
+
+  try {
+    orders = await recentOrders(context.env);
+  } catch (error) {
+    console.error(error);
+    problems.push("Не удалось загрузить список заказов.");
   }
 
   const total = stock.reduce(
@@ -1036,12 +1168,17 @@ async function dashboard(context, secret, options = {}) {
 
     ${renderExcluded(excluded, products, csrf)}
 
-    <section class="section">
-      <h3>Заказы</h3>
+    <section class="section" id="orders">
+      <div class="order-header">
+        <h3>Заказы (${orders.length})</h3>
+        <a class="order-refresh" href="/developers#orders">↻ Обновить</a>
+      </div>
       <p class="muted">
-        Резервирование и списание заказов
-        добавим на следующем этапе.
+        Последние 100 заказов. Нажми на номер,
+        чтобы увидеть состав, размеры и сумму.
+        Резервирование, оплата и отмена — следующий этап.
       </p>
+      ${renderOrders(orders)}
     </section>
 
     <form method="POST" action="/developers">
@@ -1277,6 +1414,22 @@ td small {
   border-radius: 9px;
   padding: 14px;
 }
+.order-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.order-refresh { color: #146789; text-decoration: none; font-size: 14px; }
+.order-card { border: 1px solid #dce5eb; border-radius: 10px; margin: 12px 0; overflow: hidden; background: #fff; }
+.order-summary { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; cursor: pointer; list-style-position: inside; }
+.order-title { font-weight: bold; overflow-wrap: anywhere; }
+.order-meta { color: #71808e; font-size: 13px; }
+.order-total { margin-left: auto; white-space: nowrap; }
+.order-body { border-top: 1px solid #dce5eb; padding: 16px; }
+.orders-table { min-width: 680px; }
+.order-bottom { display: flex; justify-content: space-between; gap: 12px; padding-top: 14px; font-size: 14px; }
+.status-pill { padding: 5px 9px; border-radius: 20px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+.status-pending { background: #edf1f5; color: #506574; }
+.status-reserved { background: #e7f0ff; color: #2458a5; }
+.status-sold { background: #eaf7ee; color: #28734a; }
+.status-cancelled, .status-expired { background: #fff0f0; color: #a03b3b; }
+.status-unknown { background: #edf1f5; color: #506574; }
 @media (max-width: 650px) {
   main { margin: 20px auto; padding: 12px; }
   .card { padding: 18px; }
