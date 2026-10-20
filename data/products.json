@@ -32,6 +32,9 @@
     "description": "рапрапр",
     "price": 200,
     "category": "головные-уборы",
+    "photos": [
+      "/media/logo5oceanscoloreng-1.jpg"
+    ],
     "available": true,
     "featured": false,
     "new_arrival": false
