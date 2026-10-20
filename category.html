@@ -1,0 +1,304 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Каталог — 5 океанов</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #f5f7fa;
+  color: #14283a;
+  font-family: Arial, sans-serif;
+}
+
+a { color: inherit; text-decoration: none; }
+
+header {
+  background: #102c43;
+  color: white;
+  padding: 22px 6%;
+}
+
+nav {
+  max-width: 1150px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.brand {
+  font-weight: bold;
+  font-size: 21px;
+}
+
+.back {
+  color: #c2d9e6;
+  font-size: 14px;
+}
+
+.hero {
+  background: #102c43;
+  color: white;
+  padding: 38px 20px 60px;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: clamp(30px, 5vw, 48px);
+  margin: 0 0 12px;
+}
+
+.hero p { color: #c2d9e6; }
+
+main {
+  max-width: 1150px;
+  margin: 40px auto;
+  padding: 0 20px;
+  min-height: 35vh;
+}
+
+.products {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fill, minmax(240px, 1fr));
+  gap: 24px;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px #102c4310;
+}
+
+.card img, .placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #edf1f5;
+  display: block;
+}
+
+.placeholder {
+  display: grid;
+  place-items: center;
+  color: #71808e;
+}
+
+.info { padding: 20px; }
+
+.info h3 { margin: 0 0 10px; }
+
+.description {
+  color: #617383;
+  line-height: 1.5;
+}
+
+.price {
+  font-size: 23px;
+  font-weight: bold;
+}
+
+.sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.size {
+  padding: 8px 12px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.status {
+  font-size: 13px;
+  color: #28734a;
+}
+
+.status.off { color: #a03b3b; }
+
+footer {
+  padding: 40px 20px;
+  text-align: center;
+  color: #71808e;
+}
+
+@media(max-width: 500px) {
+  header { padding: 18px; }
+  .brand { font-size: 18px; }
+  main { margin-top: 25px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <nav>
+    <a class="brand" href="/">5 ОКЕАНОВ</a>
+    <a class="back" href="/">← На главную</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1 id="categoryTitle">Каталог</h1>
+  <p id="categoryDescription"></p>
+</section>
+
+<main>
+  <div id="products" class="products">
+    Загружаем товары...
+  </div>
+</main>
+
+<footer>Клуб «5 океанов»</footer>
+
+<script>
+const container = document.getElementById("products");
+const slug = new URLSearchParams(
+  window.location.search
+).get("slug");
+
+function element(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+async function loadCategory() {
+  try {
+    const responses = await Promise.all([
+      fetch("/data/categories.json", {cache: "no-store"}),
+      fetch("/data/products.json", {cache: "no-store"})
+    ]);
+
+    if (responses.some(r => !r.ok)) {
+      throw new Error("Ошибка загрузки данных");
+    }
+
+    const [categories, products] = await Promise.all(
+      responses.map(r => r.json())
+    );
+
+    const category = categories.find(
+      c => c.slug === slug
+    );
+
+    if (!category) {
+      document.getElementById("categoryTitle")
+        .textContent = "Категория не найдена";
+      container.textContent = "Вернитесь на главную.";
+      return;
+    }
+
+    document.title = category.title + " — 5 океанов";
+
+    document.getElementById("categoryTitle")
+      .textContent = category.title;
+
+    document.getElementById("categoryDescription")
+      .textContent = category.description || "";
+
+    const matching = products.filter(p =>
+      String(p.category || "").trim().toLowerCase() ===
+      String(category.id).trim().toLowerCase()
+    );
+
+    container.replaceChildren();
+
+    if (!matching.length) {
+      container.textContent =
+        "В этой категории пока нет товаров.";
+      return;
+    }
+
+    matching.forEach(product => {
+      const card = element("article", "card");
+
+      const photo = product.photos?.[0];
+
+      if (photo) {
+        const img = document.createElement("img");
+        img.src = photo;
+        img.alt = product.title || "Товар";
+        img.loading = "lazy";
+        card.appendChild(img);
+      } else {
+        card.appendChild(
+          element("div", "placeholder", "5 ОКЕАНОВ")
+        );
+      }
+
+      const info = element("div", "info");
+
+      info.appendChild(
+        element("h3", "", product.title || "Товар")
+      );
+
+      if (product.description) {
+        info.appendChild(
+          element("p", "description", product.description)
+        );
+      }
+
+      if (product.price != null) {
+        const price = new Intl.NumberFormat("ru-RU", {
+          style: "currency",
+          currency: "RUB",
+          maximumFractionDigits: 0
+        }).format(product.price);
+
+        info.appendChild(element("p", "price", price));
+      }
+
+      info.appendChild(
+        element(
+          "p",
+          product.available ? "status" : "status off",
+          product.available ? "В наличии" : "Нет в наличии"
+        )
+      );
+
+      if (product.available && product.sizes?.length) {
+        info.appendChild(
+          element("p", "", "Размеры в наличии:")
+        );
+
+        const sizes = element("div", "sizes");
+
+        product.sizes.forEach(size => {
+          sizes.appendChild(
+            element("span", "size", size)
+          );
+        });
+
+        info.appendChild(sizes);
+      }
+
+      card.appendChild(info);
+      container.appendChild(card);
+    });
+
+  } catch (error) {
+    container.textContent =
+      "Не удалось загрузить товары.";
+    console.error(error);
+  }
+}
+
+loadCategory();
+</script>
+
+</body>
+</html>
