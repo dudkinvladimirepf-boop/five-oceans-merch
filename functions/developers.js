@@ -278,8 +278,7 @@ async function inventoryRows(env) {
             total_quantity - reserved_quantity
               AS available_quantity
      FROM inventory
-     ORDER BY product_slug, size
-     LIMIT 500`
+     ORDER BY product_slug, size`
   ).all();
 
   return result.results || [];
@@ -606,7 +605,7 @@ function renderShippingButton(order, csrf, current, formAction = "/developers") 
 
 function renderOrders(orders, csrf, formAction = "/developers") {
   if (!orders.length) {
-    return '<p class="muted">Оформленных заказов пока нет.</p>';
+    return '<p class="muted">По выбранным условиям заказов не найдено.</p>';
   }
   return orders.map(order => {
     const status = String(order.status || "pending");
@@ -1348,7 +1347,7 @@ function getProductTitle(item, names) {
 
 function renderInventory(rows, products, csrf, formAction = "/developers") {
   if (!rows.length) {
-    return `<p class="muted">Склад пока пуст.</p>`;
+    return `<p class="muted">По выбранным условиям складских позиций не найдено.</p>`;
   }
 
   const names = productNames(products);
@@ -1634,7 +1633,7 @@ async function dashboard(context, secret, options = {}) {
     <section class="section" id="orders">
       <div class="order-header">
         <h3>Заказы (${orders.length})</h3>
-        <a class="order-refresh" href="/developers#orders">↻ Обновить</a>
+        <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
       </div>
       <p class="muted">
         Поиск и фильтры работают по всей базе заказов.
