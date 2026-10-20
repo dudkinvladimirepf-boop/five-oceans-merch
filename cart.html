@@ -352,12 +352,17 @@ button {
       Последний заказ доступен здесь 10 минут после оформления,
       в том числе после обновления страницы. Скопируйте текст
       и отправьте его магазину в Telegram. Сам заказ остаётся в системе.
+      Для повторной покупки тех же товаров нажмите «Повторить заказ»:
+      они вернутся в корзину, но новый заказ не создастся автоматически.
     </p>
     <textarea id="recent-order-preview" class="order-preview"
       readonly aria-label="Текст созданного заказа"></textarea>
     <div class="actions">
       <button id="recent-order-copy" class="secondary-button" type="button">
         Скопировать заказ
+      </button>
+      <button id="repeat-order" class="secondary-button" type="button" hidden>
+        Повторить заказ
       </button>
       <a class="chat-link" href="https://t.me/okeanhd_5oceans_shop?direct"
         target="_blank" rel="noopener noreferrer">Открыть чат магазина →</a>
@@ -398,6 +403,7 @@ const recentOrderTitle = document.getElementById("recent-order-title");
 const recentOrderPreview = document.getElementById("recent-order-preview");
 const recentOrderStatus = document.getElementById("recent-order-status");
 const recentOrderCopy = document.getElementById("recent-order-copy");
+const repeatOrderButton = document.getElementById("repeat-order");
 let recentOrderTimer;
 
 let cart = [];
@@ -542,11 +548,31 @@ function composeOrderText(items, number) {
   return lines.join("\n");
 }
 
+function validRepeatItems(items) {
+  return Array.isArray(items) &&
+    items.length > 0 &&
+    items.length <= 40 &&
+    items.every(item =>
+      item &&
+      typeof item.slug === "string" &&
+      item.slug.length > 0 &&
+      item.slug.length <= 300 &&
+      typeof item.size === "string" &&
+      item.size.length <= 100 &&
+      Number.isInteger(item.quantity) &&
+      item.quantity >= 1 &&
+      item.quantity <= 99
+    );
+}
+
+/* Восстановление последнего зарегистрированного заказа. */
+
 function restoreRecentOrder() {
   clearTimeout(recentOrderTimer);
   recentOrderSection.hidden = true;
   recentOrderPreview.value = "";
   recentOrderStatus.textContent = "";
+  repeatOrderButton.hidden = true;
 
   try {
     const saved = JSON.parse(localStorage.getItem(RECENT_ORDER_KEY) || "null");
@@ -560,6 +586,7 @@ function restoreRecentOrder() {
     recentOrderTitle.textContent = "Заказ № " + saved.order_id + " создан";
     recentOrderPreview.value = saved.text;
     recentOrderSection.hidden = false;
+    repeatOrderButton.hidden = !validRepeatItems(saved.items);
     recentOrderTimer = setTimeout(restoreRecentOrder, saved.expiresAt - Date.now());
   } catch (error) {
     console.warn("Не удалось восстановить последний заказ", error);
@@ -567,32 +594,52 @@ function restoreRecentOrder() {
 }
 
 function completeCheckout(order) {
-  // Сначала сохраняем подтверждение: ошибка хранилища не должна
-  // лишить клиента номера заказа или защиты от повторной отправки.
+  // Сначала сохраняем подтверждение заказа с его составом.
+  // Даже при сбое очистки корзины номер заказа останется доступен.
   const saved = {
     order_id: order.order_id,
     text: composeOrderText(order.items, order.order_id),
+    items: order.items.map(item => ({
+      slug: String(item.slug),
+      size: String(item.size || ""),
+      quantity: Number(item.quantity)
+    })),
     expiresAt: Date.now() + RECENT_ORDER_TTL
   };
+
   localStorage.setItem(RECENT_ORDER_KEY, JSON.stringify(saved));
 
-  const storedKey = JSON.parse(localStorage.getItem(CHECKOUT_KEY) || "null");
-  if (storedKey?.key === currentOrder.checkoutKey) {
-    // Завершённый ключ больше не используется для новой покупки.
-    localStorage.setItem(CHECKOUT_KEY, JSON.stringify({
-      ...storedKey, completed: true
-    }));
-  }
-
+  // Сначала очищаем корзину, и только потом помечаем ключ
+  // оформления завершённым. Если очистка не удалась,
+  // прежний ключ остаётся активным и не позволит создать дубль.
   const storedCart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
-  // Не стираем товары, изменённые в другой вкладке во время запроса.
-  if (Array.isArray(storedCart) &&
-      cartFingerprint(storedCart) === currentOrder.fingerprint) {
+
+  if (
+    Array.isArray(storedCart) &&
+    cartFingerprint(storedCart) === currentOrder.fingerprint
+  ) {
     localStorage.setItem(CART_KEY, "[]");
     cart = [];
   } else {
+    // Не уничтожаем изменения, сделанные в другой вкладке.
     cart = Array.isArray(storedCart) ? storedCart : [];
   }
+
+  const storedKey = JSON.parse(localStorage.getItem(CHECKOUT_KEY) || "null");
+
+  if (storedKey?.key === currentOrder.checkoutKey) {
+    try {
+      localStorage.setItem(CHECKOUT_KEY, JSON.stringify({
+        ...storedKey,
+        completed: true
+      }));
+    } catch (error) {
+      // Отметка нужна только для следующей покупки.
+      // Сам заказ уже зарегистрирован и корзина очищена.
+      console.warn("Не удалось завершить ключ оформления", error);
+    }
+  }
+
   currentOrder = null;
   window.dispatchEvent(new Event("five-oceans-cart-updated"));
   renderCart();
@@ -999,6 +1046,68 @@ recentOrderCopy.addEventListener("click", async () => {
   recentOrderStatus.textContent = copied
     ? "Заказ скопирован. Вставьте его в Telegram и отправьте магазину."
     : "Скопируйте выделенный текст вручную и отправьте магазину.";
+});
+
+/* Повторение только собирает НОВУЮ корзину, без создания заказа. */
+repeatOrderButton.addEventListener("click", () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECENT_ORDER_KEY) || "null");
+
+    if (
+      !saved ||
+      saved.expiresAt <= Date.now() ||
+      !validRepeatItems(saved.items)
+    ) {
+      restoreRecentOrder();
+      recentOrderStatus.textContent =
+        "Повторить этот заказ уже нельзя. Добавьте товары через каталог.";
+      return;
+    }
+
+    const stored = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+
+    if (!Array.isArray(stored)) {
+      throw new Error("Не удалось прочитать корзину.");
+    }
+
+    if (stored.length) {
+      cart = stored;
+      renderCart();
+      recentOrderStatus.textContent =
+        "В корзине уже есть другие товары. " +
+        "Сначала завершите или очистите её, чтобы повторить заказ.";
+      return;
+    }
+
+    const repeatItems = saved.items.map(item => ({
+      slug: item.slug,
+      size: item.size,
+      quantity: item.quantity
+    }));
+
+    // Новый уникальный ключ даже при полностью одинаковом составе.
+    localStorage.setItem(CHECKOUT_KEY, JSON.stringify({
+      fingerprint: cartFingerprint(repeatItems),
+      key: newCheckoutUuid()
+    }));
+    localStorage.setItem(CART_KEY, JSON.stringify(repeatItems));
+
+    cart = repeatItems;
+    currentOrder = null;
+
+    window.dispatchEvent(new Event("five-oceans-cart-updated"));
+    renderCart();
+
+    recentOrderStatus.textContent =
+      "Товары добавлены в новую корзину. " +
+      "Проверьте их наличие и нажмите «Создать заказ» для нового оформления.";
+
+    checkout.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    recentOrderStatus.textContent =
+      "Не удалось повторить заказ. " +
+      (error?.message || "Обновите страницу и попробуйте снова.");
+  }
 });
 
 window.addEventListener("pageshow", restoreRecentOrder);
