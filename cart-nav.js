@@ -1,7 +1,7 @@
 
 /*
   Клуб «5 океанов»
-  Общая корзина для всех страниц сайта
+  Единая корзина и счётчик товаров
 */
 
 (function () {
@@ -9,7 +9,7 @@
 
   const CART_KEY = "five-oceans-cart-v1";
 
-  // Подсчёт общего количества товаров
+  // Подсчёт количества товаров
   function getCartCount() {
     try {
       const saved = localStorage.getItem(CART_KEY);
@@ -33,14 +33,17 @@
     }
   }
 
-  // Создание кнопки в меню
+  // Создаём ссылку на корзину
   function initCartNavigation() {
 
     const nav = document.querySelector("header nav");
 
     if (!nav) return;
 
-    // Находим область ссылок в верхнем меню
+    // Предотвращаем дублирование кнопки
+    if (nav.querySelector(".global-cart-link")) return;
+
+    // Выбираем место в меню
     const menu =
       nav.querySelector(".menu") ||
       nav.querySelector(".nav-links") ||
@@ -56,30 +59,52 @@
     cartLink.appendChild(cartLabel);
     menu.appendChild(cartLink);
 
-    // Общие стили кнопки
+    // Оформление в едином стиле с меню
     const style = document.createElement("style");
 
     style.textContent = `
-      header nav {
-        flex-wrap: wrap;
+      header nav .menu,
+      header nav .nav-links {
+        align-items: center;
       }
 
-      .global-cart-link {
+      header nav .global-cart-link {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 10px 14px;
-        border: 1px solid rgba(255,255,255,0.5);
-        border-radius: 8px;
-        color: white;
+
+        margin-left: 14px;
+        padding: 0;
+
+        border: none;
+        border-radius: 0;
+        background: transparent;
+
+        color: inherit;
+        font-family: inherit;
+        font-size: inherit;
+        font-weight: 400;
+        line-height: inherit;
+
         text-decoration: none;
-        font-size: 14px;
-        font-weight: 600;
         white-space: nowrap;
+        cursor: pointer;
       }
 
-      .global-cart-link:hover {
-        background: rgba(255,255,255,0.12);
+      header nav .global-cart-link:hover {
+        color: #c2d9e6;
+        background: transparent;
+      }
+
+      header nav .global-cart-link:focus-visible {
+        outline: 2px solid white;
+        outline-offset: 5px;
+      }
+
+      @media (max-width: 600px) {
+        header nav .global-cart-link {
+          margin-left: 6px;
+        }
       }
     `;
 
@@ -89,36 +114,40 @@
     function updateCartBadge() {
       const count = getCartCount();
 
-      cartLabel.textContent = `Корзина (${count})`;
+      cartLabel.textContent = "Корзина (" + count + ")";
 
       cartLink.setAttribute(
         "aria-label",
-        `Открыть корзину. Товаров: ${count}`
+        "Открыть корзину. Товаров: " + count
       );
     }
 
-    // Доступно для других скриптов сайта
+    // Доступ для остальных скриптов
     window.updateCartBadge = updateCartBadge;
 
-    // Обновление после изменений на текущей странице
+    // Изменение корзины на текущей странице
     window.addEventListener(
       "five-oceans-cart-updated",
       updateCartBadge
     );
 
-    // Обновление, если корзина изменилась в другой вкладке
+    // Изменение корзины в другой вкладке
     window.addEventListener("storage", (event) => {
-      if (event.key === CART_KEY || event.key === null) {
+      if (
+        event.key === CART_KEY ||
+        event.key === null
+      ) {
         updateCartBadge();
       }
     });
 
-    // Обновление при возвращении на страницу
+    // Возвращение на страницу
     window.addEventListener(
       "pageshow",
       updateCartBadge
     );
 
+    // Возвращение во вкладку
     document.addEventListener(
       "visibilitychange",
       () => {
@@ -131,6 +160,7 @@
     updateCartBadge();
   }
 
+  // Запуск после загрузки страницы
   if (document.readyState === "loading") {
     document.addEventListener(
       "DOMContentLoaded",
@@ -141,3 +171,4 @@
   }
 
 })();
+
