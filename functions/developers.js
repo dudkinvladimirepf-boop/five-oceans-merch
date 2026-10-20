@@ -525,7 +525,7 @@ async function changeShippingStatus(context, form) {
   const expected = String(form.get("expected_shipping_status") || "");
   const next = String(form.get("shipping_status") || "");
 
-  if (!/^FO-\\d{8}-[0-9A-F]{12}$/.test(orderId)) {
+  if (!/^FO-\d{8}-[0-9A-F]{12}$/.test(orderId)) {
     throw new Error("Некорректный номер заказа.");
   }
 
