@@ -38,3 +38,32 @@ content:
       - name: available
         label: В наличии
         type: boolean
+
+  - name: categories
+    label: Категории
+    type: file
+    path: data/categories.json
+    format: json
+    list: true
+    fields:
+      - name: title
+        label: Название категории
+        type: string
+        required: true
+      - name: id
+        label: Идентификатор категории
+        type: string
+        required: true
+        description: Должен совпадать с категорией товара
+      - name: slug
+        label: Адрес категории
+        type: string
+        required: true
+        description: Латинскими буквами, без пробелов
+      - name: description
+        label: Описание категории
+        type: text
+      - name: image
+        label: Фотография категории
+        type: image
+
