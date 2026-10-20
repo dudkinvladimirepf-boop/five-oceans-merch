@@ -1,14 +1,183 @@
 
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Мерч Клуба «5 океанов»</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f5f7fa;
+      color: #14283a;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      background: #102c43;
+      color: white;
+      padding: 52px 20px;
+      text-align: center;
+    }
+    header h1 { font-size: 38px; margin: 10px 0; }
+    header p { color: #c2d9e6; }
+    main { max-width: 1150px; margin: 40px auto; padding: 0 20px; }
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      overflow: hidden;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px #102c4310;
+    }
+    .card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: contain;
+      background: #edf1f5;
+    }
+    .info { padding: 20px; }
+    .info h3 { margin: 0 0 10px; }
+    .description { color: #617383; line-height: 1.5; }
+    .price { font-size: 23px; font-weight: bold; }
+    .sizes { display: flex; gap: 8px; flex-wrap: wrap; }
+    .size {
+      padding: 9px 13px;
+      border: 1px solid #cbd5df;
+      border-radius: 8px;
+      background: white;
+      color: #14283a;
+      cursor: pointer;
+    }
+    .size.selected {
+      background: #102c43;
+      color: white;
+    }
+    .status { font-size: 13px; color: #28734a; }
+    .unavailable { color: #a03b3b; }
+    footer {
+      padding: 40px 20px;
+      text-align: center;
+      color: #71808e;
+    }
+  </style>
 </head>
 <body>
-  <h1>Клуб «5 океанов»</h1>
-  <h2>Магазин мерча</h2>
-  <p>Скоро здесь появится наш каталог!</p>
+  <header>
+    <p>КЛУБ «5 ОКЕАНОВ»</p>
+    <h1>Мерч для тех, кто любит океан</h1>
+    <p>Вещи, вдохновлённые морем и экспедициями</p>
+  </header>
+
+  <main>
+    <h2>Наши товары</h2>
+    <div id="products" class="products">
+      Загружаем каталог...
+    </div>
+  </main>
+
+  <footer>Клуб «5 океанов»</footer>
+
+  <script>
+    const container = document.getElementById("products");
+
+    async function loadProducts() {
+      try {
+        const response = await fetch("/data/products.json", {
+          cache: "no-store"
+        });
+        if (!response.ok) throw new Error("Ошибка загрузки");
+
+        const products = await response.json();
+        container.replaceChildren();
+
+        if (!products.length) {
+          container.textContent = "Товары скоро появятся.";
+          return;
+        }
+
+        products.forEach(product => {
+          const card = document.createElement("article");
+          card.className = "card";
+
+          const photo = product.photos?.[0];
+          if (photo) {
+            const img = document.createElement("img");
+            img.src = photo;
+            img.alt = product.title || "Товар";
+            img.loading = "lazy";
+            card.appendChild(img);
+          }
+
+          const info = document.createElement("div");
+          info.className = "info";
+
+          const title = document.createElement("h3");
+          title.textContent = product.title;
+          info.appendChild(title);
+
+          const description = document.createElement("p");
+          description.className = "description";
+          description.textContent = product.description || "";
+          info.appendChild(description);
+
+          const price = document.createElement("p");
+          price.className = "price";
+          price.textContent = new Intl.NumberFormat("ru-RU", {
+            style: "currency",
+            currency: "RUB",
+            maximumFractionDigits: 0
+          }).format(product.price || 0);
+          info.appendChild(price);
+
+          const status = document.createElement("p");
+          status.className = product.available
+            ? "status" : "status unavailable";
+          status.textContent = product.available
+            ? "В наличии" : "Нет в наличии";
+          info.appendChild(status);
+
+          if (product.available && product.sizes?.length) {
+            const label = document.createElement("p");
+            label.textContent = "Выберите размер:";
+            info.appendChild(label);
+
+            const sizes = document.createElement("div");
+            sizes.className = "sizes";
+
+            product.sizes.forEach(size => {
+              const button = document.createElement("button");
+              button.className = "size";
+              button.type = "button";
+              button.textContent = size;
+              button.onclick = () => {
+                sizes.querySelectorAll(".size").forEach(b =>
+                  b.classList.remove("selected")
+                );
+                button.classList.add("selected");
+              };
+              sizes.appendChild(button);
+            });
+
+            info.appendChild(sizes);
+          }
+
+          card.appendChild(info);
+          container.appendChild(card);
+        });
+      } catch (error) {
+        container.textContent =
+          "Не удалось загрузить каталог товаров.";
+        console.error(error);
+      }
+    }
+
+    loadProducts();
+  </script>
 </body>
 </html>
