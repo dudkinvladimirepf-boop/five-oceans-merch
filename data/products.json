@@ -21,6 +21,9 @@
     "description": "ахахахаах",
     "price": 9000,
     "category": "аксессуары",
+    "photos": [
+      "/media/oceanhdlogo.png"
+    ],
     "available": true,
     "featured": true,
     "new_arrival": true
