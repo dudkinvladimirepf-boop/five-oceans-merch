@@ -1,28 +1,22 @@
 
 /*
-  Клуб «5 океанов»
-  Панель разработчиков
+  Клуб «5 океанов» — панель разработчиков
 
-  Функции:
   - Защищённый вход
-  - Просмотр складских остатков
   - Ручная синхронизация Pages CMS -> D1
-  - Редактирование количества
-  - Удаление устаревших пустых позиций
-
-  Остатки хранятся в Cloudflare D1.
+  - Редактирование остатков
+  - Удаление любой позиции с подтверждением
+  - Защита резервов и истории заказов
+  - Исключения для повторной синхронизации
+  - Восстановление удалённых позиций
 */
 
-const COOKIE_NAME = "__Host-fo-admin";
+const COOKIE = "__Host-fo-admin";
 const SESSION_SECONDS = 8 * 3600;
 const MAX_STOCK = 1000000;
 const encoder = new TextEncoder();
 
-/* ==============================
-   ОСНОВНЫЕ ФУНКЦИИ
-============================== */
-
-function escapeHtml(value) {
+function esc(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -31,16 +25,16 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function formatNumber(value) {
+function number(value) {
   return Number(value || 0).toLocaleString("ru-RU");
 }
 
-function htmlResponse(body, status = 200) {
+function pageResponse(body, status = 200) {
   return new Response(body, {
     status,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "private, no-store",
+      "Cache-Control": "no-store, private",
       "X-Robots-Tag": "noindex, nofollow",
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
@@ -55,78 +49,36 @@ function htmlResponse(body, status = 200) {
   });
 }
 
-function redirectWithCookie(cookie) {
-  return new Response(null, {
-    status: 303,
-    headers: {
-      Location: "/developers",
-      "Set-Cookie": cookie,
-      "Cache-Control": "no-store"
-    }
-  });
-}
-
 function getSecret(env) {
-  return typeof env.ADMIN_PASSWORD === "string" &&
-    env.ADMIN_PASSWORD.length > 0
-      ? env.ADMIN_PASSWORD
-      : null;
+  return typeof env.ADMIN_PASSWORD === "string"
+    && env.ADMIN_PASSWORD.length
+    ? env.ADMIN_PASSWORD
+    : null;
 }
 
-function getDatabase(env) {
+function database(env) {
   if (!env.DB) {
-    throw new Error("База данных D1 не подключена.");
+    throw new Error("Cloudflare D1 не подключена.");
   }
 
   return env.DB;
 }
 
-/* ==============================
-   АВТОРИЗАЦИЯ
-============================== */
-
-async function passwordsMatch(input, secret) {
-  const [aHash, bHash] = await Promise.all([
-    crypto.subtle.digest(
-      "SHA-256",
-      encoder.encode(input)
-    ),
-    crypto.subtle.digest(
-      "SHA-256",
-      encoder.encode(secret)
-    )
-  ]);
-
-  const a = new Uint8Array(aHash);
-  const b = new Uint8Array(bHash);
-
-  let difference = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    difference |= a[i] ^ b[i];
-  }
-
-  return difference === 0;
-}
-
-async function sessionKey(secret) {
+async function hmacKey(secret) {
   return crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
-    {
-      name: "HMAC",
-      hash: "SHA-256"
-    },
+    { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"]
   );
 }
 
-function toBase64Url(bytes) {
+function encode64(bytes) {
   let binary = "";
 
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+  for (const b of bytes) {
+    binary += String.fromCharCode(b);
   }
 
   return btoa(binary)
@@ -135,7 +87,7 @@ function toBase64Url(bytes) {
     .replace(/=+$/g, "");
 }
 
-function fromBase64Url(value) {
+function decode64(value) {
   const base64 = value
     .replace(/-/g, "+")
     .replace(/_/g, "/");
@@ -147,175 +99,154 @@ function fromBase64Url(value) {
 
   return Uint8Array.from(
     atob(padded),
-    char => char.charCodeAt(0)
+    c => c.charCodeAt(0)
   );
+}
+
+async function sign(secret, message) {
+  const key = await hmacKey(secret);
+
+  return encode64(new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(message)
+    )
+  ));
+}
+
+async function verify(secret, message, token) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token || "")) {
+    return false;
+  }
+
+  try {
+    const key = await hmacKey(secret);
+
+    return await crypto.subtle.verify(
+      "HMAC",
+      key,
+      decode64(token),
+      encoder.encode(message)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function cookieValue(request) {
+  const prefix = COOKIE + "=";
+
+  const found = (request.headers.get("Cookie") || "")
+    .split(";")
+    .map(x => x.trim())
+    .find(x => x.startsWith(prefix));
+
+  return found ? found.slice(prefix.length) : "";
+}
+
+function setCookie(value) {
+  return COOKIE + "=" + value +
+    "; Path=/; HttpOnly; Secure; SameSite=Strict" +
+    "; Max-Age=" + SESSION_SECONDS;
+}
+
+function clearCookie() {
+  return COOKIE +
+    "=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0";
+}
+
+function redirect(cookie) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: "/developers",
+      "Set-Cookie": cookie,
+      "Cache-Control": "no-store"
+    }
+  });
+}
+
+async function passwordMatches(input, secret) {
+  const hashes = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(input)),
+    crypto.subtle.digest("SHA-256", encoder.encode(secret))
+  ]);
+
+  const a = new Uint8Array(hashes[0]);
+  const b = new Uint8Array(hashes[1]);
+  let diff = 0;
+
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+
+  return diff === 0;
 }
 
 async function createSession(secret) {
   const expiry = String(
-    Math.floor(Date.now() / 1000) +
-    SESSION_SECONDS
+    Math.floor(Date.now() / 1000) + SESSION_SECONDS
   );
 
-  const key = await sessionKey(secret);
-
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(expiry)
-  );
-
-  return (
-    expiry + "." +
-    toBase64Url(new Uint8Array(signature))
-  );
+  return expiry + "." + await sign(secret, expiry);
 }
 
-function getCookie(request) {
-  const raw = request.headers.get("Cookie") || "";
-  const prefix = COOKIE_NAME + "=";
+async function authorized(request, secret) {
+  const value = cookieValue(request);
+  const parts = value.split(".");
 
-  const entry = raw
-    .split(";")
-    .map(item => item.trim())
-    .find(item => item.startsWith(prefix));
+  if (parts.length !== 2) return false;
 
-  return entry
-    ? entry.slice(prefix.length)
-    : null;
-}
+  const [expiry, signature] = parts;
 
-function sessionCookie(value) {
-  return (
-    COOKIE_NAME + "=" + value +
-    "; Path=/" +
-    "; HttpOnly" +
-    "; Secure" +
-    "; SameSite=Strict" +
-    "; Max-Age=" + SESSION_SECONDS
-  );
-}
+  if (!/^\d{10,12}$/.test(expiry)) return false;
 
-function expiredCookie() {
-  return (
-    COOKIE_NAME + "=" +
-    "; Path=/" +
-    "; HttpOnly" +
-    "; Secure" +
-    "; SameSite=Strict" +
-    "; Max-Age=0"
-  );
-}
-
-async function isAuthorized(request, secret) {
-  const cookie = getCookie(request);
-
-  if (!cookie) {
-    return false;
-  }
-
-  try {
-    const parts = cookie.split(".");
-
-    if (parts.length !== 2) {
-      return false;
-    }
-
-    const [expiry, signature] = parts;
-
-    if (
-      !/^\d{10,12}$/.test(expiry) ||
-      !/^[A-Za-z0-9_-]{43}$/.test(signature)
-    ) {
-      return false;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const expiresAt = Number(expiry);
-
-    if (
-      !Number.isSafeInteger(expiresAt) ||
-      expiresAt <= now ||
-      expiresAt > now + SESSION_SECONDS
-    ) {
-      return false;
-    }
-
-    const key = await sessionKey(secret);
-
-    return crypto.subtle.verify(
-      "HMAC",
-      key,
-      fromBase64Url(signature),
-      encoder.encode(expiry)
-    );
-
-  } catch {
-    return false;
-  }
-}
-
-/* ==============================
-   CSRF-ЗАЩИТА
-============================== */
-
-async function createCsrfToken(request, secret) {
-  const cookie = getCookie(request);
-
-  if (!cookie) {
-    return "";
-  }
-
-  const key = await sessionKey(secret);
-
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode("developers-action:" + cookie)
-  );
-
-  return toBase64Url(
-    new Uint8Array(signature)
-  );
-}
-
-async function verifyCsrfToken(
-  request,
-  secret,
-  submittedToken
-) {
-  const cookie = getCookie(request);
+  const now = Math.floor(Date.now() / 1000);
+  const end = Number(expiry);
 
   if (
-    !cookie ||
-    !/^[A-Za-z0-9_-]{43}$/.test(submittedToken)
+    end <= now ||
+    end > now + SESSION_SECONDS
   ) {
     return false;
   }
 
-  try {
-    const key = await sessionKey(secret);
-
-    return crypto.subtle.verify(
-      "HMAC",
-      key,
-      fromBase64Url(submittedToken),
-      encoder.encode("developers-action:" + cookie)
-    );
-  } catch {
-    return false;
-  }
+  return verify(secret, expiry, signature);
 }
 
-/* ==============================
-   ЧТЕНИЕ PAGES CMS
-============================== */
+async function csrfToken(request, secret) {
+  return sign(
+    secret,
+    "developers-action:" + cookieValue(request)
+  );
+}
 
-async function loadProducts(context) {
+async function checkCsrf(request, secret, token) {
+  return verify(
+    secret,
+    "developers-action:" + cookieValue(request),
+    token
+  );
+}
+
+function hidden(name, value) {
+  return `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
+}
+
+function sizesOf(product) {
+  const sizes = Array.isArray(product.sizes)
+    ? [...new Set(product.sizes
+        .map(x => String(x ?? "").trim())
+        .filter(Boolean))]
+    : [];
+
+  return sizes.length ? sizes : [""];
+}
+
+async function productsFromCMS(context) {
   if (!context.env.ASSETS) {
-    throw new Error(
-      "Опубликованный каталог недоступен."
-    );
+    throw new Error("Каталог Pages CMS недоступен.");
   }
 
   const url = new URL(
@@ -323,137 +254,29 @@ async function loadProducts(context) {
     context.request.url
   );
 
-  const response = await context.env.ASSETS.fetch(
-    new Request(url.toString(), {
-      headers: {
-        "Cache-Control": "no-cache"
-      }
-    })
+  const result = await context.env.ASSETS.fetch(
+    new Request(url.toString())
   );
 
-  if (!response.ok) {
-    throw new Error(
-      "Не удалось загрузить каталог Pages CMS."
-    );
+  if (!result.ok) {
+    throw new Error("Не удалось загрузить products.json.");
   }
 
-  const products = await response.json();
+  const products = await result.json();
 
   if (!Array.isArray(products)) {
-    throw new Error(
-      "Неверный формат файла products.json."
-    );
+    throw new Error("Неверный формат каталога.");
   }
 
   return products;
 }
 
-function productSizes(product) {
-  const sizes = Array.isArray(product.sizes)
-    ? [
-        ...new Set(
-          product.sizes
-            .map(size => String(size ?? "").trim())
-            .filter(Boolean)
-        )
-      ]
-    : [];
-
-  return sizes.length ? sizes : [""];
-}
-
-function positionKey(value, size) {
-  return JSON.stringify([
-    String(value),
-    String(size)
-  ]);
-}
-
-/* ==============================
-   АКТУАЛЬНЫЕ ПОЗИЦИИ КАТАЛОГА
-============================== */
-
-function buildActiveIndex(products) {
-  const slugs = new Set();
-  const ids = new Set();
-
-  for (const product of products) {
-    if (
-      !product ||
-      typeof product !== "object"
-    ) {
-      throw new Error(
-        "Обнаружена некорректная запись каталога."
-      );
-    }
-
-    const slug = String(
-      product.slug || ""
-    ).trim();
-
-    const id = String(
-      product.product_id || ""
-    ).trim().toLowerCase();
-
-    if (!slug) {
-      throw new Error(
-        "В каталоге есть товар без slug."
-      );
-    }
-
-    for (const size of productSizes(product)) {
-      slugs.add(positionKey(slug, size));
-
-      if (id) {
-        ids.add(positionKey(id, size));
-      }
-    }
-  }
-
-  return { slugs, ids };
-}
-
-function isCurrentPosition(item, active) {
-  const slugKey = positionKey(
-    item.product_slug,
-    item.size
-  );
-
-  if (active.slugs.has(slugKey)) {
-    return true;
-  }
-
-  if (item.product_id) {
-    const idKey = positionKey(
-      String(item.product_id).toLowerCase(),
-      item.size
-    );
-
-    if (active.ids.has(idKey)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/* ==============================
-   ЧТЕНИЕ СКЛАДА
-============================== */
-
-async function loadInventory(env) {
-  const db = getDatabase(env);
-
-  const result = await db.prepare(
-    `SELECT
-       product_slug,
-       product_id,
-       size,
-       total_quantity,
-       reserved_quantity,
-       total_quantity - reserved_quantity
-         AS available_quantity,
-       updated_at
+async function inventoryRows(env) {
+  const result = await database(env).prepare(
+    `SELECT product_slug, product_id, size,
+            total_quantity, reserved_quantity,
+            total_quantity - reserved_quantity
+              AS available_quantity
      FROM inventory
      ORDER BY product_slug, size
      LIMIT 500`
@@ -462,153 +285,110 @@ async function loadInventory(env) {
   return result.results || [];
 }
 
-/* ==============================
-   РУЧНАЯ СИНХРОНИЗАЦИЯ
-============================== */
+async function excludedRows(env) {
+  const result = await database(env).prepare(
+    `SELECT product_slug, product_id, size, deleted_at
+     FROM inventory_exclusions
+     ORDER BY deleted_at DESC
+     LIMIT 500`
+  ).all();
 
-function prepareCatalog(products) {
-  const positions = [];
-  const warnings = [];
+  return result.results || [];
+}
+
+/* РУЧНАЯ СИНХРОНИЗАЦИЯ */
+
+async function syncCatalog(context) {
+  const db = database(context.env);
+  const products = await productsFromCMS(context);
+
+  const report = {
+    created: 0,
+    linked: 0,
+    updated: 0,
+    unchanged: 0,
+    excluded: 0,
+    warnings: []
+  };
 
   const usedIds = new Map();
   const usedSlugs = new Map();
+  const positions = [];
 
   const uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   for (const product of products) {
-    if (
-      !product ||
-      typeof product !== "object"
-    ) {
-      continue;
-    }
+    const slug = String(product?.slug || "").trim();
+    const id = String(product?.product_id || "")
+      .trim().toLowerCase();
 
-    const title = String(
-      product.title || "Без названия"
-    );
+    const title = String(product?.title || slug);
 
-    const slug = String(
-      product.slug || ""
-    ).trim();
-
-    const id = String(
-      product.product_id || ""
-    ).trim().toLowerCase();
-
-    if (!slug) {
-      warnings.push(
+    if (!slug || !uuidPattern.test(id)) {
+      report.warnings.push(
         "Пропущен товар «" + title +
-        "»: отсутствует slug."
-      );
-      continue;
-    }
-
-    if (!uuidPattern.test(id)) {
-      warnings.push(
-        "Пропущен товар «" + title +
-        "»: отсутствует корректный product_id."
+        "»: отсутствует slug или product_id."
       );
       continue;
     }
 
     if (
-      usedIds.has(id) &&
-      usedIds.get(id) !== slug
+      (usedIds.has(id) && usedIds.get(id) !== slug) ||
+      (usedSlugs.has(slug) && usedSlugs.get(slug) !== id)
     ) {
       throw new Error(
-        "Одинаковый product_id у товаров: " +
-        usedIds.get(id) + " и " + slug
-      );
-    }
-
-    if (
-      usedSlugs.has(slug) &&
-      usedSlugs.get(slug) !== id
-    ) {
-      throw new Error(
-        "Повторяется slug товара: " + slug
+        "Обнаружены повторяющиеся идентификаторы товаров."
       );
     }
 
     usedIds.set(id, slug);
     usedSlugs.set(slug, id);
 
-    for (const size of productSizes(product)) {
-      positions.push({
-        product_id: id,
-        product_slug: slug,
-        size
-      });
+    for (const size of sizesOf(product)) {
+      positions.push({ slug, id, size });
     }
   }
 
-  if (positions.length > 1000) {
-    throw new Error(
-      "Превышено количество позиций для синхронизации."
-    );
-  }
+  for (const item of positions) {
+    const { slug, id, size } = item;
 
-  return { positions, warnings };
-}
+    // Удалённую вручную позицию не возвращаем.
 
-async function synchronizeCatalog(context) {
-  const db = getDatabase(context.env);
-  const products = await loadProducts(context);
+    const excluded = await db.prepare(
+      `SELECT 1
+       FROM inventory_exclusions
+       WHERE (product_slug = ? AND size = ?)
+          OR (product_id = ? AND size = ?)
+       LIMIT 1`
+    ).bind(slug, size, id, size).first();
 
-  const { positions, warnings } =
-    prepareCatalog(products);
-
-  const summary = {
-    created: 0,
-    linked: 0,
-    renamed: 0,
-    unchanged: 0,
-    warnings
-  };
-
-  for (const position of positions) {
-    const {
-      product_id,
-      product_slug,
-      size
-    } = position;
-
-    // Сначала ищем по постоянному ID.
+    if (excluded) {
+      report.excluded++;
+      continue;
+    }
 
     const byId = await db.prepare(
       `SELECT product_slug
        FROM inventory
-       WHERE product_id = ?
-         AND size = ?
+       WHERE product_id = ? AND size = ?
        LIMIT 1`
-    ).bind(
-      product_id,
-      size
-    ).first();
+    ).bind(id, size).first();
 
     if (byId) {
-      if (byId.product_slug === product_slug) {
-        summary.unchanged++;
+      if (byId.product_slug === slug) {
+        report.unchanged++;
         continue;
       }
 
-      const conflict = await db.prepare(
-        `SELECT product_id
-         FROM inventory
-         WHERE product_slug = ?
-           AND size = ?
-         LIMIT 1`
-      ).bind(
-        product_slug,
-        size
-      ).first();
+      const occupied = await db.prepare(
+        `SELECT 1 FROM inventory
+         WHERE product_slug = ? AND size = ?`
+      ).bind(slug, size).first();
 
-      if (conflict) {
-        summary.warnings.push(
-          "Конфликт адреса: " +
-          product_slug + " / " +
-          (size || "Без размера")
+      if (occupied) {
+        report.warnings.push(
+          "Конфликт адреса: " + slug + " / " + size
         );
         continue;
       }
@@ -617,786 +397,656 @@ async function synchronizeCatalog(context) {
         `UPDATE inventory
          SET product_slug = ?,
              updated_at = CURRENT_TIMESTAMP
-         WHERE product_id = ?
-           AND size = ?
+         WHERE product_id = ? AND size = ?
            AND product_slug = ?`
-      ).bind(
-        product_slug,
-        product_id,
-        size,
-        byId.product_slug
-      ).run();
+      ).bind(slug, id, size, byId.product_slug).run();
 
-      if (update.meta?.changes === 1) {
-        summary.renamed++;
-      }
-
+      report.updated += Number(update.meta?.changes || 0);
       continue;
     }
 
-    // Затем ищем старую запись по slug.
-
     const bySlug = await db.prepare(
-      `SELECT product_id
-       FROM inventory
-       WHERE product_slug = ?
-         AND size = ?
+      `SELECT product_id FROM inventory
+       WHERE product_slug = ? AND size = ?
        LIMIT 1`
-    ).bind(
-      product_slug,
-      size
-    ).first();
+    ).bind(slug, size).first();
 
     if (bySlug) {
-      const previousId = String(
+      const oldId = String(
         bySlug.product_id || ""
-      ).trim().toLowerCase();
+      ).toLowerCase();
 
-      if (
-        previousId &&
-        previousId !== product_id
-      ) {
-        summary.warnings.push(
-          "Конфликт ID: " +
-          product_slug + " / " +
-          (size || "Без размера")
+      if (oldId && oldId !== id) {
+        report.warnings.push(
+          "Конфликт product_id: " + slug + " / " + size
         );
         continue;
       }
 
-      if (!previousId) {
+      if (!oldId) {
         const update = await db.prepare(
           `UPDATE inventory
            SET product_id = ?,
                updated_at = CURRENT_TIMESTAMP
-           WHERE product_slug = ?
-             AND size = ?
+           WHERE product_slug = ? AND size = ?
              AND product_id IS NULL`
-        ).bind(
-          product_id,
-          product_slug,
-          size
-        ).run();
+        ).bind(id, slug, size).run();
 
-        if (update.meta?.changes === 1) {
-          summary.linked++;
-        }
-
+        report.linked += Number(update.meta?.changes || 0);
       } else {
-        summary.unchanged++;
+        report.unchanged++;
       }
 
       continue;
     }
 
-    // Новая позиция: нулевой остаток.
-
     const inserted = await db.prepare(
       `INSERT OR IGNORE INTO inventory (
-         product_slug,
-         product_id,
-         size,
-         total_quantity,
-         reserved_quantity
-       )
-       VALUES (?, ?, ?, 0, 0)`
-    ).bind(
-      product_slug,
-      product_id,
-      size
-    ).run();
+         product_slug, product_id, size,
+         total_quantity, reserved_quantity
+       ) VALUES (?, ?, ?, 0, 0)`
+    ).bind(slug, id, size).run();
 
-    if (inserted.meta?.changes === 1) {
-      summary.created++;
-    } else {
-      summary.unchanged++;
-    }
+    report.created += Number(inserted.meta?.changes || 0);
   }
 
-  return summary;
+  return report;
 }
 
-/* ==============================
-   ПРОВЕРКА КОЛИЧЕСТВА
-============================== */
+/* ИЗМЕНЕНИЕ ОСТАТКА */
 
-function parseQuantity(raw) {
-  const text = String(raw ?? "");
+function parseQuantity(value) {
+  const raw = String(value ?? "");
 
-  if (!/^(0|[1-9]\d{0,6})$/.test(text)) {
-    throw new Error(
-      "Количество должно быть целым числом от 0 до " +
-      MAX_STOCK + "."
-    );
+  if (!/^(0|[1-9]\d{0,6})$/.test(raw)) {
+    throw new Error("Некорректное количество.");
   }
 
-  const value = Number(text);
+  const qty = Number(raw);
 
-  if (value > MAX_STOCK) {
-    throw new Error(
-      "Максимальное количество: " + MAX_STOCK + "."
-    );
+  if (qty > MAX_STOCK) {
+    throw new Error("Количество не может превышать 1 000 000.");
   }
 
-  return value;
+  return qty;
 }
 
 function parsePosition(form) {
-  const slug = String(
-    form.get("product_slug") ?? ""
-  );
+  const slug = String(form.get("product_slug") || "");
+  const size = String(form.get("size") || "");
 
-  const size = String(
-    form.get("size") ?? ""
-  );
-
-  if (
-    !slug ||
-    slug.length > 300 ||
-    size.length > 100
-  ) {
-    throw new Error(
-      "Некорректные данные складской позиции."
-    );
+  if (!slug || slug.length > 300 || size.length > 100) {
+    throw new Error("Некорректная складская позиция.");
   }
 
   return { slug, size };
 }
 
-/* ==============================
-   ИЗМЕНЕНИЕ ОСТАТКА
-============================== */
-
 async function saveStock(context, form) {
-  const db = getDatabase(context.env);
+  const db = database(context.env);
   const { slug, size } = parsePosition(form);
 
-  const quantity = parseQuantity(
-    form.get("quantity")
-  );
-
-  const expectedTotal = parseQuantity(
-    form.get("expected_total")
-  );
-
-  const row = await db.prepare(
-    `SELECT
-       total_quantity,
-       reserved_quantity
-     FROM inventory
-     WHERE product_slug = ?
-       AND size = ?
-     LIMIT 1`
-  ).bind(
-    slug,
-    size
-  ).first();
-
-  if (!row) {
-    throw new Error(
-      "Складская позиция не найдена. Обновите страницу."
-    );
-  }
-
-  if (Number(row.total_quantity) !== expectedTotal) {
-    throw new Error(
-      "Остаток уже изменился в другом окне. " +
-      "Обновите страницу и повторите действие."
-    );
-  }
-
-  if (quantity < Number(row.reserved_quantity)) {
-    throw new Error(
-      "Нельзя установить остаток меньше резерва (" +
-      row.reserved_quantity + " шт.)."
-    );
-  }
-
-  if (quantity === Number(row.total_quantity)) {
-    return "Количество не изменилось.";
-  }
+  const quantity = parseQuantity(form.get("quantity"));
+  const expected = parseQuantity(form.get("expected_total"));
 
   const result = await db.prepare(
     `UPDATE inventory
      SET total_quantity = ?,
          updated_at = CURRENT_TIMESTAMP
-     WHERE product_slug = ?
-       AND size = ?
+     WHERE product_slug = ? AND size = ?
        AND total_quantity = ?
        AND reserved_quantity <= ?`
   ).bind(
-    quantity,
-    slug,
-    size,
-    expectedTotal,
-    quantity
+    quantity, slug, size, expected, quantity
   ).run();
 
   if (result.meta?.changes !== 1) {
     throw new Error(
       "Не удалось сохранить остаток. " +
-      "Возможно, данные изменились. Обновите страницу."
+      "Возможно, он уже изменился или превышен резерв. " +
+      "Обновите страницу."
     );
   }
 
-  return (
-    "Остаток сохранён: " +
-    slug + " / " +
-    (size || "Без размера") +
-    " — " + quantity + " шт."
-  );
+  return "Остаток сохранён: " + slug +
+    " / " + (size || "Без размера") +
+    " — " + quantity + " шт.";
 }
 
-/* ==============================
-   УДАЛЕНИЕ УСТАРЕВШЕЙ ПОЗИЦИИ
-============================== */
+/* ДВУХЭТАПНОЕ УДАЛЕНИЕ */
 
-async function deleteStock(context, form) {
-  const db = getDatabase(context.env);
+function confirmationMessage(
+  request, slug, size, total, expiry
+) {
+  return JSON.stringify([
+    "delete-inventory",
+    cookieValue(request),
+    slug,
+    size,
+    total,
+    expiry
+  ]);
+}
+
+async function deletionConfirmation(
+  context, secret, form
+) {
   const { slug, size } = parsePosition(form);
+  const db = database(context.env);
 
-  /*
-    Каждый раз заново читаем каталог.
-    Нельзя доверять отметке из HTML.
-  */
-
-  const products = await loadProducts(context);
-  const active = buildActiveIndex(products);
-
-  const row = await db.prepare(
-    `SELECT
-       product_slug,
-       product_id,
-       size,
-       total_quantity,
-       reserved_quantity
+  const item = await db.prepare(
+    `SELECT total_quantity, reserved_quantity
      FROM inventory
-     WHERE product_slug = ?
-       AND size = ?
+     WHERE product_slug = ? AND size = ?
      LIMIT 1`
-  ).bind(
-    slug,
-    size
-  ).first();
+  ).bind(slug, size).first();
 
-  if (!row) {
+  if (!item) {
+    throw new Error("Складская позиция не найдена.");
+  }
+
+  if (Number(item.reserved_quantity) > 0) {
     throw new Error(
-      "Позиция уже удалена или не найдена."
+      "Позиция находится в резерве. " +
+      "Сначала необходимо снять резерв."
     );
   }
 
-  if (isCurrentPosition(row, active)) {
-    throw new Error(
-      "Нельзя удалить актуальную позицию товара. " +
-      "Её сначала нужно убрать из Pages CMS " +
-      "или изменить список размеров."
-    );
-  }
-
-  if (
-    Number(row.total_quantity) !== 0 ||
-    Number(row.reserved_quantity) !== 0
-  ) {
-    throw new Error(
-      "Удалять можно только позиции " +
-      "с нулевым остатком и без резерва."
-    );
-  }
-
-  /*
-    Если позиция встречается в заказах,
-    сохраняем её для истории.
-  */
-
-  const linkedOrder = await db.prepare(
-    `SELECT order_id
-     FROM order_items
-     WHERE product_slug = ?
-       AND size = ?
+  const linked = await db.prepare(
+    `SELECT order_id FROM order_items
+     WHERE product_slug = ? AND size = ?
      LIMIT 1`
-  ).bind(
-    slug,
-    size
-  ).first();
+  ).bind(slug, size).first();
 
-  if (linkedOrder) {
+  if (linked) {
     throw new Error(
       "Позиция связана с заказом. " +
-      "Удаление заблокировано для сохранения истории."
+      "Удаление запрещено для сохранения истории."
     );
   }
 
+  const total = Number(item.total_quantity);
+  const expiry = Math.floor(Date.now() / 1000) + 300;
+
+  const token = await sign(
+    secret,
+    confirmationMessage(
+      context.request, slug, size, total, expiry
+    )
+  );
+
+  const csrf = await csrfToken(context.request, secret);
+
+  return `
+    <h2>Подтверждение удаления</h2>
+
+    <div class="danger-panel">
+      <strong>Удалить складскую позицию?</strong>
+
+      <p>Товар: <b>${esc(slug)}</b></p>
+      <p>Размер: <b>${esc(size || "Без размера")}</b></p>
+      <p>Текущий остаток: <b>${number(total)} шт.</b></p>
+
+      <p>
+        Позиция будет удалена из таблицы inventory.
+        Если остаток больше нуля, его значение будет
+        потеряно. Товар останется в Pages CMS,
+        но станет недоступным для заказа.
+      </p>
+
+      <p>
+        Ручная синхронизация не создаст
+        эту позицию повторно.
+      </p>
+    </div>
+
+    <form method="POST" action="/developers">
+      ${hidden("action", "stock-delete-confirm")}
+      ${hidden("csrf", csrf)}
+      ${hidden("product_slug", slug)}
+      ${hidden("size", size)}
+      ${hidden("expected_total", total)}
+      ${hidden("expires", expiry)}
+      ${hidden("confirm_token", token)}
+
+      <button class="danger-button" type="submit">
+        Да, удалить позицию
+      </button>
+    </form>
+
+    <a class="back-link" href="/developers">
+      ← Отмена, вернуться на склад
+    </a>
+  `;
+}
+
+async function deleteStock(context, secret, form) {
+  const { slug, size } = parsePosition(form);
+  const total = parseQuantity(form.get("expected_total"));
+
+  const expiry = Number(form.get("expires"));
+  const token = String(form.get("confirm_token") || "");
+  const now = Math.floor(Date.now() / 1000);
+
+  if (
+    !Number.isSafeInteger(expiry) ||
+    expiry <= now ||
+    expiry > now + 300
+  ) {
+    throw new Error(
+      "Время подтверждения истекло. Повтори удаление."
+    );
+  }
+
+  const valid = await verify(
+    secret,
+    confirmationMessage(
+      context.request, slug, size, total, expiry
+    ),
+    token
+  );
+
+  if (!valid) {
+    throw new Error(
+      "Ошибка подтверждения удаления."
+    );
+  }
+
+  const db = database(context.env);
+
   /*
-    Проверки остатков и заказов
-    повторяем непосредственно в DELETE.
+    Обе операции выполняются в одной транзакции:
+    1. Запоминаем исключение.
+    2. Удаляем запись из inventory.
+
+    Проверки резервов, количества и заказов
+    выполняются непосредственно в SQL.
   */
 
-  const result = await db.prepare(
-    `DELETE FROM inventory
-     WHERE product_slug = ?
-       AND size = ?
-       AND total_quantity = 0
-       AND reserved_quantity = 0
-       AND NOT EXISTS (
-         SELECT 1
-         FROM order_items AS oi
-         WHERE oi.product_slug = inventory.product_slug
-           AND oi.size = inventory.size
-       )`
-  ).bind(
-    slug,
-    size
-  ).run();
+  const statements = [
+    db.prepare(
+      `INSERT INTO inventory_exclusions (
+         product_slug, size, product_id
+       )
+       SELECT product_slug, size, product_id
+       FROM inventory
+       WHERE product_slug = ?
+         AND size = ?
+         AND total_quantity = ?
+         AND reserved_quantity = 0
+         AND NOT EXISTS (
+           SELECT 1 FROM order_items AS oi
+           WHERE oi.product_slug = inventory.product_slug
+             AND oi.size = inventory.size
+         )
+       ON CONFLICT(product_slug, size)
+       DO UPDATE SET
+         product_id = excluded.product_id,
+         deleted_at = CURRENT_TIMESTAMP`
+    ).bind(slug, size, total),
+
+    db.prepare(
+      `DELETE FROM inventory
+       WHERE product_slug = ?
+         AND size = ?
+         AND total_quantity = ?
+         AND reserved_quantity = 0
+         AND EXISTS (
+           SELECT 1 FROM inventory_exclusions AS ex
+           WHERE ex.product_slug = inventory.product_slug
+             AND ex.size = inventory.size
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM order_items AS oi
+           WHERE oi.product_slug = inventory.product_slug
+             AND oi.size = inventory.size
+         )`
+    ).bind(slug, size, total)
+  ];
+
+  const results = await db.batch(statements);
+
+  if (
+    results[0]?.meta?.changes !== 1 ||
+    results[1]?.meta?.changes !== 1
+  ) {
+    throw new Error(
+      "Удаление не выполнено. " +
+      "Возможно, остаток или резерв изменился. " +
+      "Обнови страницу."
+    );
+  }
+
+  return "Удалена позиция: " + slug +
+    " / " + (size || "Без размера") + ".";
+}
+
+/* ВОССТАНОВЛЕНИЕ ИСКЛЮЧЕНИЯ */
+
+async function restoreStock(context, form) {
+  const { slug, size } = parsePosition(form);
+
+  const result = await database(context.env).prepare(
+    `DELETE FROM inventory_exclusions
+     WHERE product_slug = ? AND size = ?`
+  ).bind(slug, size).run();
 
   if (result.meta?.changes !== 1) {
-    throw new Error(
-      "Не удалось удалить позицию. " +
-      "Обновите страницу и проверьте её состояние."
-    );
+    throw new Error("Исключение уже отсутствует.");
   }
 
   return (
-    "Складская позиция удалена: " +
-    slug + " / " +
-    (size || "Без размера") + "."
+    "Исключение снято. Нажми «Синхронизировать " +
+    "с Pages CMS», чтобы создать позицию с остатком 0."
   );
 }
 
-/* ==============================
-   ТАБЛИЦА СКЛАДА
-============================== */
+/* ОТОБРАЖЕНИЕ ДАННЫХ */
 
-function renderInventory(
-  inventory,
-  products,
-  csrf,
-  catalogAvailable
-) {
-  if (!inventory.length) {
-    return `
-      <p class="muted">
-        Склад пуст. Создайте товары в Pages CMS
-        и выполните синхронизацию.
-      </p>
-    `;
-  }
-
-  const namesById = new Map();
-  const namesBySlug = new Map();
+function productNames(products) {
+  const byId = new Map();
+  const bySlug = new Map();
 
   for (const product of products) {
-    if (!product || typeof product !== "object") {
-      continue;
-    }
-
     const title = String(
-      product.title || product.slug || "Товар"
+      product?.title || product?.slug || "Товар"
     );
 
-    if (product.product_id) {
-      namesById.set(
+    if (product?.product_id) {
+      byId.set(
         String(product.product_id).toLowerCase(),
         title
       );
     }
 
-    if (product.slug) {
-      namesBySlug.set(product.slug, title);
+    if (product?.slug) {
+      bySlug.set(String(product.slug), title);
     }
   }
 
-  let active = null;
+  return { byId, bySlug };
+}
 
-  if (catalogAvailable) {
-    try {
-      active = buildActiveIndex(products);
-    } catch (error) {
-      console.error(error);
-    }
+function getProductTitle(item, names) {
+  return names.byId.get(
+    String(item.product_id || "").toLowerCase()
+  ) || names.bySlug.get(item.product_slug)
+    || item.product_slug;
+}
+
+function renderInventory(rows, products, csrf) {
+  if (!rows.length) {
+    return `<p class="muted">Склад пока пуст.</p>`;
   }
 
-  const rows = inventory.map(item => {
+  const names = productNames(products);
+
+  const body = rows.map(item => {
     const slug = String(item.product_slug);
     const size = String(item.size || "");
-
-    const title =
-      namesById.get(
-        String(item.product_id || "").toLowerCase()
-      ) ||
-      namesBySlug.get(slug) ||
-      slug;
-
+    const title = getProductTitle(item, names);
     const total = Number(item.total_quantity);
-    const reserved = Number(item.reserved_quantity);
-
-    const current = active
-      ? isCurrentPosition(item, active)
-      : true;
-
-    const obsolete = Boolean(active && !current);
-    const empty = total === 0 && reserved === 0;
-
-    let status = `
-      <span class="tag-active">
-        В каталоге
-      </span>
-    `;
-
-    if (!active) {
-      status = `
-        <span class="tag-unknown">
-          Не проверено
-        </span>
-      `;
-    } else if (obsolete) {
-      status = `
-        <span class="tag-old">
-          Устаревшая
-        </span>
-      `;
-    }
-
-    const deletion = obsolete
-      ? (
-          empty
-            ? `
-              <form method="POST" action="/developers">
-                <input type="hidden"
-                  name="action" value="stock-delete">
-
-                <input type="hidden"
-                  name="csrf" value="${escapeHtml(csrf)}">
-
-                <input type="hidden"
-                  name="product_slug"
-                  value="${escapeHtml(slug)}">
-
-                <input type="hidden"
-                  name="size" value="${escapeHtml(size)}">
-
-                <button type="submit" class="delete-button">
-                  Удалить
-                </button>
-              </form>
-            `
-            : `
-              <span class="action-note">
-                Для удаления обнулите остаток
-                и снимите резерв
-              </span>
-            `
-        )
-      : `<span class="dash">—</span>`;
 
     return `
       <tr>
         <td>
-          <strong>${escapeHtml(title)}</strong>
-          <small>${escapeHtml(slug)}</small>
-          ${status}
+          <strong>${esc(title)}</strong>
+          <small>${esc(slug)}</small>
+        </td>
+
+        <td>${esc(size || "Без размера")}</td>
+
+        <td class="num">${number(item.reserved_quantity)}</td>
+
+        <td class="num green">
+          ${number(item.available_quantity)}
         </td>
 
         <td>
-          ${escapeHtml(size || "Без размера")}
-        </td>
+          <form method="POST" action="/developers"
+                class="inline-form">
+            ${hidden("action", "stock-save")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", slug)}
+            ${hidden("size", size)}
+            ${hidden("expected_total", total)}
 
-        <td class="number">
-          ${formatNumber(reserved)}
-        </td>
-
-        <td class="number available">
-          ${formatNumber(item.available_quantity)}
-        </td>
-
-        <td>
-          <form
-            method="POST"
-            action="/developers"
-            class="stock-form"
-          >
-            <input type="hidden"
-              name="action" value="stock-save">
-
-            <input type="hidden"
-              name="csrf"
-              value="${escapeHtml(csrf)}">
-
-            <input type="hidden"
-              name="product_slug"
-              value="${escapeHtml(slug)}">
-
-            <input type="hidden"
-              name="size"
-              value="${escapeHtml(size)}">
-
-            <input type="hidden"
-              name="expected_total"
-              value="${total}">
-
-            <input
-              type="number"
+            <input type="number"
               name="quantity"
               min="0"
               max="${MAX_STOCK}"
               step="1"
               value="${total}"
-              aria-label="Остаток ${escapeHtml(title)} ${escapeHtml(size || "Без размера")}"
-              required
-            >
+              required>
 
-            <button class="save-button" type="submit">
+            <button class="blue-button" type="submit">
               Сохранить
             </button>
           </form>
         </td>
 
         <td>
-          ${deletion}
+          <form method="POST" action="/developers">
+            ${hidden("action", "stock-delete-request")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", slug)}
+            ${hidden("size", size)}
+
+            <button class="outline-danger" type="submit">
+              Удалить
+            </button>
+          </form>
         </td>
       </tr>
     `;
   }).join("");
 
   return `
-    <div class="table-scroll">
+    <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>Товар</th>
             <th>Размер</th>
-            <th class="number">Резерв</th>
-            <th class="number">Доступно</th>
+            <th class="num">Резерв</th>
+            <th class="num">Доступно</th>
             <th>На складе / изменить</th>
             <th>Удаление</th>
           </tr>
         </thead>
-
-        <tbody>
-          ${rows}
-        </tbody>
+        <tbody>${body}</tbody>
       </table>
     </div>
   `;
 }
 
-/* ==============================
-   ОТЧЁТ СИНХРОНИЗАЦИИ
-============================== */
+function renderExcluded(rows, products, csrf) {
+  if (!rows.length) return "";
 
-function renderSyncSummary(summary) {
-  if (!summary) {
-    return "";
-  }
+  const names = productNames(products);
 
-  const warnings = summary.warnings.length
-    ? `
-      <div class="warning">
-        <strong>Требуется внимание:</strong>
+  const body = rows.map(item => `
+    <tr>
+      <td>
+        <strong>${esc(getProductTitle(item, names))}</strong>
+        <small>${esc(item.product_slug)}</small>
+      </td>
+      <td>${esc(item.size || "Без размера")}</td>
+      <td>
+        <form method="POST" action="/developers">
+          ${hidden("action", "stock-restore")}
+          ${hidden("csrf", csrf)}
+          ${hidden("product_slug", item.product_slug)}
+          ${hidden("size", item.size)}
 
-        <ul>
-          ${summary.warnings.map(
-            message =>
-              `<li>${escapeHtml(message)}</li>`
-          ).join("")}
-        </ul>
-      </div>
-    `
-    : "";
+          <button class="blue-button" type="submit">
+            Восстановить
+          </button>
+        </form>
+      </td>
+    </tr>
+  `).join("");
 
   return `
-    <div class="success">
-      ✓ Синхронизация завершена
-    </div>
+    <section class="section">
+      <h3>Удалённые складские позиции</h3>
+      <p class="muted">
+        Эти позиции отсутствуют в inventory.
+        Синхронизация с Pages CMS их пропускает.
+      </p>
 
-    <p class="sync-report">
-      Создано: <strong>${summary.created}</strong>
-      · Привязано: <strong>${summary.linked}</strong>
-      · Обновлено: <strong>${summary.renamed}</strong>
-      · Без изменений: <strong>${summary.unchanged}</strong>
-    </p>
-
-    ${warnings}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Товар</th>
+              <th>Размер</th>
+              <th>Действие</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </section>
   `;
 }
 
-/* ==============================
-   ПАНЕЛЬ РАЗРАБОТЧИКОВ
-============================== */
-
-async function renderDashboard(
-  context,
-  secret,
-  options = {}
-) {
-  let inventory = [];
-  let products = [];
-
-  let inventoryError = "";
-  let catalogError = "";
-
-  try {
-    inventory = await loadInventory(context.env);
-  } catch (error) {
-    console.error(error);
-
-    inventoryError =
-      "Не удалось загрузить склад из D1.";
-  }
-
-  try {
-    products = await loadProducts(context);
-  } catch (error) {
-    console.error(error);
-
-    catalogError =
-      "Не удалось загрузить каталог Pages CMS.";
-  }
-
-  const total = inventory.reduce(
-    (sum, item) =>
-      sum + Number(item.total_quantity || 0),
-    0
-  );
-
-  const reserved = inventory.reduce(
-    (sum, item) =>
-      sum + Number(item.reserved_quantity || 0),
-    0
-  );
-
-  const csrf = await createCsrfToken(
-    context.request,
-    secret
-  );
-
-  const message = options.message
-    ? `
-      <div class="success">
-        ✓ ${escapeHtml(options.message)}
-      </div>
-    `
-    : "";
-
-  const operationError = options.error
-    ? `
-      <div class="error">
-        ${escapeHtml(options.error)}
-      </div>
-    `
-    : "";
+function renderReport(report) {
+  if (!report) return "";
 
   return `
     <div class="success">
-      ✓ Вы авторизованы
+      ✓ Синхронизация завершена.
+      Создано: ${report.created}.
+      Привязано: ${report.linked}.
+      Обновлено: ${report.updated}.
+      Без изменений: ${report.unchanged}.
+      Исключено: ${report.excluded}.
     </div>
+
+    ${report.warnings.length ? `
+      <div class="warning">
+        <strong>Предупреждения:</strong>
+        <ul>${report.warnings.map(
+          x => `<li>${esc(x)}</li>`
+        ).join("")}</ul>
+      </div>
+    ` : ""}
+  `;
+}
+
+async function dashboard(context, secret, options = {}) {
+  let stock = [];
+  let excluded = [];
+  let products = [];
+  const problems = [];
+
+  try {
+    stock = await inventoryRows(context.env);
+    excluded = await excludedRows(context.env);
+  } catch (error) {
+    console.error(error);
+    problems.push(
+      "Не удалось прочитать складские данные."
+    );
+  }
+
+  try {
+    products = await productsFromCMS(context);
+  } catch (error) {
+    console.error(error);
+    problems.push("Не удалось прочитать каталог Pages CMS.");
+  }
+
+  const total = stock.reduce(
+    (sum, x) => sum + Number(x.total_quantity),
+    0
+  );
+
+  const reserved = stock.reduce(
+    (sum, x) => sum + Number(x.reserved_quantity),
+    0
+  );
+
+  const csrf = await csrfToken(context.request, secret);
+
+  return `
+    <div class="success">✓ Вы авторизованы</div>
 
     <h2>Склад</h2>
 
     <div class="stats">
       <div class="stat">
         <span>На складе</span>
-        <strong>${formatNumber(total)}</strong>
+        <strong>${number(total)}</strong>
       </div>
 
       <div class="stat">
         <span>В резерве</span>
-        <strong>${formatNumber(reserved)}</strong>
+        <strong>${number(reserved)}</strong>
       </div>
 
       <div class="stat">
         <span>Доступно</span>
-        <strong class="green">
-          ${formatNumber(total - reserved)}
-        </strong>
+        <strong class="green">${number(total - reserved)}</strong>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-header">
-        <h3>Складские остатки</h3>
+    ${options.message ? `
+      <div class="success">✓ ${esc(options.message)}</div>
+    ` : ""}
 
-        <a href="/developers" class="refresh">
-          ↻ Обновить
-        </a>
-      </div>
+    ${options.error ? `
+      <div class="error">${esc(options.error)}</div>
+    ` : ""}
+
+    ${problems.map(x =>
+      `<div class="error">${esc(x)}</div>`
+    ).join("")}
+
+    ${renderReport(options.report)}
+
+    <section class="section">
+      <h3>Складские остатки</h3>
 
       <div class="sync-area">
         <p class="muted">
-          Синхронизация выполняется вручную.
-          Новые товары и размеры добавляются
-          с остатком 0 шт.
-          Существующие остатки сохраняются.
+          Синхронизация с Pages CMS выполняется вручную.
+          Удалённые позиции не создаются повторно.
         </p>
 
         <form method="POST" action="/developers">
-          <input type="hidden"
-            name="action" value="sync">
+          ${hidden("action", "sync")}
+          ${hidden("csrf", csrf)}
 
-          <input type="hidden"
-            name="csrf"
-            value="${escapeHtml(csrf)}">
-
-          <button class="sync-button" type="submit">
+          <button class="blue-button" type="submit">
             ↻ Синхронизировать с Pages CMS
           </button>
         </form>
       </div>
 
-      ${message}
-      ${operationError}
-      ${renderSyncSummary(options.summary)}
-      
-      ${inventoryError
-        ? `<div class="error">${escapeHtml(inventoryError)}</div>`
-        : ""}
-
-      ${catalogError
-        ? `<div class="warning">${escapeHtml(catalogError)}</div>`
-        : ""}
-
-      ${inventoryError
-        ? ""
-        : renderInventory(
-            inventory,
-            products,
-            csrf,
-            !catalogError
-          )
-      }
-
-      <p class="table-help">
-        <strong>Как пользоваться:</strong>
-        укажи количество в поле «На складе»
-        напротив нужного размера и нажми
-        «Сохранить». Доступное количество
-        рассчитывается с учётом резерва.
-      </p>
-
-      <p class="table-help">
-        Удаление доступно только для
-        устаревших складских позиций.
-        Позиции с остатками, резервами
-        или связанными заказами защищены.
-      </p>
-    </div>
-
-    <div class="section">
-      <h3>Заказы</h3>
+      ${renderInventory(stock, products, csrf)}
 
       <p class="muted">
-        На следующем этапе здесь появится
-        управление заказами: «В резерв»,
-        «Оплачено» и «Отменить».
+        Удаление требует подтверждения.
+        Если позиция находится в резерве
+        или связана с заказом, удалить её нельзя.
       </p>
-    </div>
+    </section>
+
+    ${renderExcluded(excluded, products, csrf)}
+
+    <section class="section">
+      <h3>Заказы</h3>
+      <p class="muted">
+        Резервирование и списание заказов
+        добавим на следующем этапе.
+      </p>
+    </section>
 
     <form method="POST" action="/developers">
-      <input type="hidden"
-        name="action" value="logout">
-
-      <input type="hidden"
-        name="csrf"
-        value="${escapeHtml(csrf)}">
+      ${hidden("action", "logout")}
+      ${hidden("csrf", csrf)}
 
       <button class="logout" type="submit">
         Выйти из панели
@@ -1405,541 +1055,285 @@ async function renderDashboard(
   `;
 }
 
-/* ==============================
-   ФОРМА ВХОДА
-============================== */
-
-function renderLogin(error = "") {
+function loginForm(error = "") {
   return `
     <p class="muted">
-      Закрытый раздел управления магазином
-      Клуба «5 океанов».
+      Закрытый раздел магазина Клуба «5 океанов».
     </p>
 
-    ${error
-      ? `<div class="error">${escapeHtml(error)}</div>`
-      : ""
-    }
+    ${error ? `<div class="error">${esc(error)}</div>` : ""}
 
     <form method="POST" action="/developers">
-      <input type="hidden"
-        name="action" value="login">
+      ${hidden("action", "login")}
 
-      <label for="password">
-        Пароль администратора
-      </label>
+      <label for="password">Пароль администратора</label>
 
-      <input
-        id="password"
-        type="password"
+      <input id="password"
         name="password"
-        autocomplete="current-password"
+        type="password"
         maxlength="256"
-        required
-      >
+        autocomplete="current-password"
+        required>
 
-      <button class="login" type="submit">
+      <button class="login-button" type="submit">
         Войти
       </button>
     </form>
   `;
 }
 
-/* ==============================
-   ДИЗАЙН СТРАНИЦЫ
-============================== */
-
-function renderPage(body, loggedIn) {
+function layout(content, loggedIn = false) {
   return `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1"
->
-
-<meta
-  name="robots"
-  content="noindex, nofollow"
->
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Для разработчиков — 5 океанов</title>
-
 <style>
-* {
-  box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
   margin: 0;
+  font-family: Arial, sans-serif;
   background: #f5f7fa;
   color: #14283a;
-  font-family: Arial, sans-serif;
 }
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
 header {
   background: #102c43;
   padding: 22px 5%;
-  color: white;
 }
-
 header a {
   color: white;
+  text-decoration: none;
   font-size: 20px;
   font-weight: bold;
 }
-
 main {
   max-width: ${loggedIn ? "1250px" : "560px"};
-  margin: 50px auto;
+  margin: 48px auto;
   padding: 20px;
 }
-
 .card {
-  padding: 30px;
   background: white;
   border-radius: 16px;
+  padding: 30px;
   box-shadow: 0 5px 25px #102c4312;
 }
-
-h1 {
-  margin: 0 0 12px;
-  font-size: 28px;
-}
-
-h2 {
-  margin: 35px 0 20px;
-  font-size: 24px;
-}
-
-h3 {
-  margin: 0;
-  font-size: 19px;
-}
-
+h1 { font-size: 28px; margin: 0 0 15px; }
+h2 { font-size: 24px; margin: 30px 0 18px; }
+h3 { font-size: 19px; margin: 0 0 15px; }
 .muted {
   color: #71808e;
+  font-size: 14px;
   line-height: 1.6;
 }
-
-label {
-  display: block;
-  margin: 25px 0 10px;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-input[type="password"] {
-  display: block;
-  width: 100%;
-  padding: 15px;
-  border: 1px solid #cbd5df;
+.success, .error, .warning {
+  padding: 13px 16px;
+  margin: 15px 0;
   border-radius: 9px;
-  font-size: 16px;
+  font-size: 14px;
+  line-height: 1.6;
 }
-
+.success { background: #eaf7ee; color: #28734a; }
+.error { background: #fff0f0; color: #a03b3b; }
+.warning { background: #fff6df; color: #765510; }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin: 20px 0 30px;
+}
+.stat {
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 12px;
+}
+.stat span {
+  display: block;
+  color: #71808e;
+  font-size: 14px;
+}
+.stat strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 30px;
+}
+.green { color: #28734a; font-weight: bold; }
+.section {
+  border: 1px solid #e0e7ed;
+  border-radius: 12px;
+  padding: 25px;
+  margin: 25px 0;
+}
+.sync-area {
+  background: #f5f9fc;
+  border: 1px solid #dbe8ef;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
 button {
   cursor: pointer;
   font-size: 14px;
   font-weight: bold;
 }
-
-.login {
-  width: 100%;
-  padding: 16px;
-  margin-top: 20px;
+.blue-button, .login-button {
+  color: white;
+  background: #146789;
   border: none;
-  border-radius: 9px;
-  background: #146789;
-  color: white;
+  border-radius: 8px;
+  padding: 11px 15px;
 }
-
-.success {
-  padding: 13px 16px;
-  margin: 15px 0;
-  border-radius: 9px;
-  background: #eaf7ee;
-  color: #28734a;
+.blue-button:hover { background: #10516d; }
+.login-button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 15px;
+}
+label {
+  display: block;
+  margin: 22px 0 10px;
   font-size: 14px;
   font-weight: bold;
-  line-height: 1.5;
 }
-
-.error {
-  padding: 15px;
-  margin: 15px 0;
-  border-radius: 9px;
-  background: #fff0f0;
-  color: #a03b3b;
-  line-height: 1.5;
+input[type="password"] {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  font-size: 16px;
 }
-
-.warning {
-  padding: 15px;
-  margin: 15px 0;
-  border-radius: 9px;
-  background: #fff6df;
-  color: #765510;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.warning ul {
-  padding-left: 20px;
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin-bottom: 30px;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 22px;
-  background: #f5f7fa;
-  border-radius: 12px;
-}
-
-.stat span {
-  color: #71808e;
-  font-size: 14px;
-}
-
-.stat strong {
-  font-size: 30px;
-  font-variant-numeric: tabular-nums;
-}
-
-.green {
-  color: #28734a;
-}
-
-.section {
-  padding: 25px;
-  margin-bottom: 25px;
-  border: 1px solid #e0e7ed;
-  border-radius: 12px;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.refresh {
-  color: #146789;
-  font-size: 14px;
-  font-weight: bold;
-  white-space: nowrap;
-}
-
-.sync-area {
-  padding: 18px;
-  margin-bottom: 18px;
-  border: 1px solid #dbe8ef;
-  border-radius: 12px;
-  background: #f5f9fc;
-}
-
-.sync-area p {
-  margin-top: 0;
-  font-size: 14px;
-}
-
-.sync-button {
-  padding: 13px 18px;
-  border: 0;
-  border-radius: 9px;
-  background: #146789;
-  color: white;
-}
-
-.sync-button:hover {
-  background: #10516d;
-}
-
-.sync-report {
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.table-scroll {
-  overflow-x: auto;
-}
-
+.table-wrap { overflow-x: auto; }
 table {
   width: 100%;
-  min-width: 850px;
+  min-width: 790px;
   border-collapse: collapse;
 }
-
 th, td {
-  padding: 15px 12px;
-  border-bottom: 1px solid #e8edf1;
+  padding: 14px 10px;
   text-align: left;
+  border-bottom: 1px solid #e8edf1;
   font-size: 14px;
-  vertical-align: middle;
 }
-
 th {
   color: #71808e;
   font-size: 12px;
 }
-
-td strong {
-  display: block;
-  margin-bottom: 5px;
-}
-
+td strong { display: block; }
 td small {
   display: block;
+  margin-top: 5px;
   color: #93a0aa;
   font-size: 11px;
   word-break: break-all;
 }
-
-.number {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.available {
-  color: #28734a;
-  font-weight: bold;
-}
-
-.tag-active,
-.tag-old,
-.tag-unknown {
-  display: inline-block;
-  margin-top: 7px;
-  padding: 4px 7px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: bold;
-}
-
-.tag-active {
-  color: #28734a;
-  background: #eaf7ee;
-}
-
-.tag-old {
-  color: #95611c;
-  background: #fff3d9;
-}
-
-.tag-unknown {
-  color: #71808e;
-  background: #edf0f3;
-}
-
-.stock-form {
+.num { text-align: right; }
+.inline-form {
   display: flex;
-  align-items: center;
   gap: 7px;
+  align-items: center;
 }
-
-.stock-form input[type="number"] {
-  width: 76px;
-  min-width: 76px;
+.inline-form input[type="number"] {
+  width: 77px;
   padding: 10px 7px;
   border: 1px solid #cbd5df;
   border-radius: 8px;
-  font-size: 14px;
 }
-
-.save-button {
-  padding: 10px 12px;
-  border: none;
+.outline-danger {
+  padding: 10px 14px;
+  border: 1px solid #efb8b8;
   border-radius: 8px;
-  color: white;
-  background: #146789;
+  color: #ad3636;
+  background: #fff3f3;
 }
-
-.save-button:hover {
-  background: #10516d;
-}
-
-.delete-button {
-  padding: 10px 12px;
-  border: 1px solid #edc4c4;
-  border-radius: 8px;
-  background: #fff2f2;
-  color: #b03a3a;
-}
-
-.delete-button:hover {
-  background: #ffe0e0;
-}
-
-.action-note {
-  display: block;
-  max-width: 150px;
-  color: #8a6a35;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.dash {
-  color: #adb7c0;
-}
-
-.table-help {
-  margin: 20px 0 0;
-  color: #71808e;
-  font-size: 13px;
+.outline-danger:hover { background: #ffe4e4; }
+.danger-panel {
+  padding: 20px;
+  border: 1px solid #efb8b8;
+  border-radius: 12px;
+  background: #fff4f4;
+  color: #7a3030;
   line-height: 1.6;
+  margin: 25px 0;
 }
-
+.danger-button {
+  border: 0;
+  border-radius: 9px;
+  background: #b53636;
+  color: white;
+  padding: 14px 20px;
+}
+.back-link {
+  display: block;
+  margin-top: 22px;
+  color: #146789;
+  text-decoration: none;
+}
 .logout {
   width: 100%;
-  padding: 14px;
-  margin-top: 15px;
+  background: white;
   border: 1px solid #cbd5df;
   border-radius: 9px;
-  background: white;
-  color: #102c43;
+  padding: 14px;
 }
-
 @media (max-width: 650px) {
-  main {
-    margin: 25px auto;
-    padding: 12px;
-  }
-
-  .card {
-    padding: 20px;
-  }
-
-  h1 {
-    font-size: 24px;
-  }
-
-  .stats {
-    gap: 8px;
-  }
-
-  .stat {
-    padding: 12px;
-  }
-
-  .stat span {
-    font-size: 11px;
-  }
-
-  .stat strong {
-    font-size: 23px;
-  }
-
-  .section {
-    padding: 15px;
-  }
-
-  .sync-button {
-    width: 100%;
-  }
+  main { margin: 20px auto; padding: 12px; }
+  .card { padding: 18px; }
+  h1 { font-size: 24px; }
+  .section { padding: 15px; }
+  .stats { gap: 8px; }
+  .stat { padding: 12px; }
+  .stat span { font-size: 11px; }
+  .stat strong { font-size: 23px; }
 }
 </style>
-
 </head>
 <body>
-
-<header>
-  <a href="/">5 ОКЕАНОВ</a>
-</header>
-
+<header><a href="/">5 ОКЕАНОВ</a></header>
 <main>
   <div class="card">
     <h1>Для разработчиков</h1>
-    ${body}
+    ${content}
   </div>
 </main>
-
 </body>
 </html>
 `;
 }
 
-/* ==============================
-   GET — ОТКРЫТИЕ ПАНЕЛИ
-============================== */
-
 export async function onRequestGet(context) {
-  const { request, env } = context;
-  const secret = getSecret(env);
+  const secret = getSecret(context.env);
 
   if (!secret) {
-    return htmlResponse(
-      renderPage(
-        renderLogin(
-          "Пароль администратора не настроен."
-        ),
-        false
-      ),
+    return pageResponse(
+      layout(loginForm("Пароль не настроен.")),
       503
     );
   }
 
-  if (!(await isAuthorized(request, secret))) {
-    return htmlResponse(
-      renderPage(renderLogin(), false)
-    );
+  if (!(await authorized(context.request, secret))) {
+    return pageResponse(layout(loginForm()));
   }
 
-  const dashboard = await renderDashboard(
-    context,
-    secret
-  );
-
-  return htmlResponse(
-    renderPage(dashboard, true)
+  return pageResponse(
+    layout(await dashboard(context, secret), true)
   );
 }
-
-/* ==============================
-   POST — ДЕЙСТВИЯ ПАНЕЛИ
-============================== */
 
 export async function onRequestPost(context) {
   const { request, env } = context;
   const secret = getSecret(env);
 
   if (!secret) {
-    return htmlResponse(
-      renderPage(
-        renderLogin(
-          "Пароль администратора не настроен."
-        ),
-        false
-      ),
+    return pageResponse(
+      layout(loginForm("Пароль не настроен.")),
       503
     );
   }
 
-  const fetchSite = request.headers.get(
-    "Sec-Fetch-Site"
-  );
-
-  if (fetchSite === "cross-site") {
-    return new Response("Forbidden", {
-      status: 403
-    });
+  if (request.headers.get("Sec-Fetch-Site") === "cross-site") {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const contentLength = Number(
@@ -1957,20 +1351,13 @@ export async function onRequestPost(context) {
   try {
     form = await request.formData();
   } catch {
-    return htmlResponse(
-      renderPage(
-        renderLogin("Ошибка чтения формы."),
-        false
-      ),
+    return pageResponse(
+      layout(loginForm("Ошибка чтения формы.")),
       400
     );
   }
 
-  const action = String(
-    form.get("action") || ""
-  );
-
-  /* ВХОД */
+  const action = String(form.get("action") || "");
 
   if (action === "login") {
     const password = String(
@@ -1980,154 +1367,99 @@ export async function onRequestPost(context) {
     if (
       !password ||
       password.length > 256 ||
-      !(await passwordsMatch(password, secret))
+      !(await passwordMatches(password, secret))
     ) {
-      return htmlResponse(
-        renderPage(
-          renderLogin("Неверный пароль."),
-          false
-        ),
+      return pageResponse(
+        layout(loginForm("Неверный пароль.")),
         401
       );
     }
 
-    const session = await createSession(secret);
-
-    return redirectWithCookie(
-      sessionCookie(session)
+    return redirect(
+      setCookie(await createSession(secret))
     );
   }
 
-  /* ВСЕ ОСТАЛЬНЫЕ ДЕЙСТВИЯ
-     ТРЕБУЮТ АВТОРИЗАЦИИ */
-
-  if (!(await isAuthorized(request, secret))) {
-    return htmlResponse(
-      renderPage(renderLogin(), false),
-      401
-    );
+  if (!(await authorized(request, secret))) {
+    return pageResponse(layout(loginForm()), 401);
   }
 
-  const csrf = String(
-    form.get("csrf") || ""
-  );
+  const csrf = String(form.get("csrf") || "");
 
-  if (
-    !(await verifyCsrfToken(
-      request,
-      secret,
-      csrf
-    ))
-  ) {
-    return htmlResponse(
-      renderPage(
-        "<p>Ошибка проверки запроса. " +
-        "Обновите страницу и попробуйте снова.</p>",
+  if (!(await checkCsrf(request, secret, csrf))) {
+    return pageResponse(
+      layout(
+        `<div class="error">
+           Ошибка проверки запроса.
+           Обнови страницу и попробуй снова.
+         </div>
+         <a href="/developers">Вернуться</a>`,
         true
       ),
       403
     );
   }
 
-  /* ВЫХОД */
-
   if (action === "logout") {
-    return redirectWithCookie(
-      expiredCookie()
-    );
+    return redirect(clearCookie());
   }
 
-  /* СИНХРОНИЗАЦИЯ */
-
-  if (action === "sync") {
-    let summary = null;
-    let errorMessage = "";
-
+  if (action === "stock-delete-request") {
     try {
-      summary = await synchronizeCatalog(context);
+      const content = await deletionConfirmation(
+        context, secret, form
+      );
+
+      return pageResponse(layout(content, true));
     } catch (error) {
-      console.error(error);
-
-      errorMessage =
-        "Синхронизация не завершена: " +
-        error.message;
+      return pageResponse(layout(
+        await dashboard(context, secret, {
+          error: error.message
+        }), true
+      ));
     }
-
-    const dashboard = await renderDashboard(
-      context,
-      secret,
-      {
-        summary,
-        error: errorMessage
-      }
-    );
-
-    return htmlResponse(
-      renderPage(dashboard, true)
-    );
   }
 
-  /* СОХРАНЕНИЕ ОСТАТКА */
+  let message = "";
+  let errorMessage = "";
+  let report = null;
 
-  if (action === "stock-save") {
-    let message = "";
-    let errorMessage = "";
+  try {
+    switch (action) {
+      case "sync":
+        report = await syncCatalog(context);
+        break;
 
-    try {
-      message = await saveStock(context, form);
-    } catch (error) {
-      console.error(error);
-      errorMessage = error.message;
+      case "stock-save":
+        message = await saveStock(context, form);
+        break;
+
+      case "stock-delete-confirm":
+        message = await deleteStock(
+          context, secret, form
+        );
+        break;
+
+      case "stock-restore":
+        message = await restoreStock(context, form);
+        break;
+
+      default:
+        throw new Error("Неизвестное действие.");
     }
+  } catch (error) {
+    console.error(error);
+    errorMessage = error.message;
+  }
 
-    const dashboard = await renderDashboard(
-      context,
-      secret,
-      {
+  return pageResponse(
+    layout(
+      await dashboard(context, secret, {
         message,
-        error: errorMessage
-      }
-    );
-
-    return htmlResponse(
-      renderPage(dashboard, true)
-    );
-  }
-
-  /* УДАЛЕНИЕ ПОЗИЦИИ */
-
-  if (action === "stock-delete") {
-    let message = "";
-    let errorMessage = "";
-
-    try {
-      message = await deleteStock(context, form);
-    } catch (error) {
-      console.error(error);
-      errorMessage = error.message;
-    }
-
-    const dashboard = await renderDashboard(
-      context,
-      secret,
-      {
-        message,
-        error: errorMessage
-      }
-    );
-
-    return htmlResponse(
-      renderPage(dashboard, true)
-    );
-  }
-
-  return htmlResponse(
-    renderPage(
-      "<p>Неизвестное действие.</p>",
+        error: errorMessage,
+        report
+      }),
       true
-    ),
-    400
+    )
   );
 }
-
-
