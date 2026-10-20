@@ -278,8 +278,7 @@ async function inventoryRows(env) {
             total_quantity - reserved_quantity
               AS available_quantity
      FROM inventory
-     ORDER BY product_slug, size
-     LIMIT 500`
+     ORDER BY product_slug, size`
   ).all();
 
   return result.results || [];
@@ -296,7 +295,11 @@ async function excludedRows(env) {
   return result.results || [];
 }
 
-async function recentOrders(env) {
+async function recentOrders(env, filters = {}) {
+  const number = String(filters.order_number || "");
+  const status = String(filters.order_status || "");
+  const shipping = String(filters.order_shipping || "");
+  const product = String(filters.order_product || "");
   const result = await database(env).prepare(
     `SELECT
        o.order_id,
@@ -312,6 +315,14 @@ async function recentOrders(env) {
      FROM (
        SELECT order_id, status, shipping_status, created_at, updated_at
        FROM orders
+       WHERE (? = '' OR instr(lower(order_id), lower(?)) > 0)
+         AND (? = '' OR status = ?)
+         AND (? = '' OR shipping_status = ?)
+         AND (? = '' OR EXISTS (
+           SELECT 1 FROM order_items AS matched
+           WHERE matched.order_id = orders.order_id
+             AND matched.product_title = ?
+         ))
        ORDER BY created_at DESC, order_id DESC
        LIMIT 100
      ) AS o
@@ -319,7 +330,7 @@ async function recentOrders(env) {
        ON i.order_id = o.order_id
      ORDER BY o.created_at DESC, o.order_id DESC,
               i.product_slug, i.size`
-  ).all();
+  ).bind(number, number, status, status, shipping, shipping, product, product).all();
 
   const orders = [];
   const byId = new Map();
@@ -501,9 +512,9 @@ async function changeOrderStatus(context, form) {
   return "Заказ " + orderId + ": " + label + ".";
 }
 
-function renderOrderButton(order, csrf, action, label, colorClass) {
+function renderOrderButton(order, csrf, action, label, colorClass, formAction = "/developers") {
   return `
-    <form method="POST" action="/developers#orders">
+    <form method="POST" action="${esc(formAction)}#orders">
       ${hidden("action", action)}
       ${hidden("csrf", csrf)}
       ${hidden("order_id", order.order_id)}
@@ -572,14 +583,14 @@ async function changeShippingStatus(context, form) {
   );
 }
 
-function renderShippingButton(order, csrf, current) {
+function renderShippingButton(order, csrf, current, formAction = "/developers") {
   const target = current === "shipped" ? "not_shipped" : "shipped";
   const label = target === "shipped"
     ? "Отметить отправленным"
     : "Вернуть в «Не отправлено»";
 
   return `
-    <form method="POST" action="/developers#orders">
+    <form method="POST" action="${esc(formAction)}#orders">
       ${hidden("action", "order-shipping")}
       ${hidden("csrf", csrf)}
       ${hidden("order_id", order.order_id)}
@@ -592,9 +603,9 @@ function renderShippingButton(order, csrf, current) {
   `;
 }
 
-function renderOrders(orders, csrf) {
+function renderOrders(orders, csrf, formAction = "/developers") {
   if (!orders.length) {
-    return '<p class="muted">Оформленных заказов пока нет.</p>';
+    return '<p class="muted">По выбранным условиям заказов не найдено.</p>';
   }
   return orders.map(order => {
     const status = String(order.status || "pending");
@@ -663,10 +674,10 @@ function renderOrders(orders, csrf) {
           ${status === "pending" || status === "reserved" ? `
             <div class="order-actions">
               ${status === "pending"
-                ? renderOrderButton(order, csrf, "order-reserve", "В резерв", "blue-button")
+                ? renderOrderButton(order, csrf, "order-reserve", "В резерв", "blue-button", formAction)
                 : ""}
-              ${renderOrderButton(order, csrf, "order-paid", "Оплачено", "paid-button")}
-              ${renderOrderButton(order, csrf, "order-cancel", "Отменить", "cancel-button")}
+              ${renderOrderButton(order, csrf, "order-paid", "Оплачено", "paid-button", formAction)}
+              ${renderOrderButton(order, csrf, "order-cancel", "Отменить", "cancel-button", formAction)}
             </div>
             <p class="order-help">
               ${status === "pending"
@@ -676,13 +687,184 @@ function renderOrders(orders, csrf) {
           ` : ""}
           <div class="shipping-actions">
             <span class="shipping-label">Отправка</span>
-            ${renderShippingButton(order, csrf, shippingStatus)}
+            ${renderShippingButton(order, csrf, shippingStatus, formAction)}
           </div>
 
         </div>
       </details>
     `;
   }).join("");
+}
+
+function readDashboardFilters(request) {
+  const p = new URL(request.url).searchParams;
+  const value = (name, max) => String(p.get(name) || "").slice(0, max).trim();
+  return {
+    stock_product: value("stock_product", 300),
+    stock_size: value("stock_size", 110),
+    stock_reserved: value("stock_reserved", 10),
+    order_number: value("order_number", 80),
+    order_status: value("order_status", 30),
+    order_shipping: value("order_shipping", 30),
+    order_product: value("order_product", 300)
+  };
+}
+
+function filteredQuery(filters) {
+  const p = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) p.set(key, value);
+  }
+  return p.toString();
+}
+
+function optionHtml(items, selected, allLabel) {
+  const opts = [`<option value="">${esc(allLabel)}</option>`];
+  for (const item of items) {
+    const value = String(item.value);
+    opts.push(
+      `<option value="${esc(value)}"${value === selected ? " selected" : ""}>` +
+      `${esc(item.label)}</option>`
+    );
+  }
+  return opts.join("");
+}
+
+function retainFilters(filters, prefix) {
+  return Object.entries(filters).filter(([key, value]) =>
+    !key.startsWith(prefix) && value
+  ).map(([key, value]) => hidden(key, value)).join("\n");
+}
+
+function filterStockRows(rows, products, filters) {
+  const product = filters.stock_product;
+  const size = filters.stock_size;
+  const reserve = filters.stock_reserved;
+  return rows.filter(item =>
+    (!product || String(item.product_slug) === product) &&
+    (!size || ("size:" + String(item.size || "")) === size) &&
+    (reserve !== "yes" || Number(item.reserved_quantity) > 0) &&
+    (reserve !== "no" || Number(item.reserved_quantity) === 0)
+  );
+}
+
+function renderStockFilters(rows, products, filters) {
+  const names = productNames(products);
+  const bySlug = new Map();
+  const sizes = new Set();
+
+  for (const item of rows) {
+    const slug = String(item.product_slug);
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, getProductTitle(item, names));
+    }
+    sizes.add(String(item.size || ""));
+  }
+  const productsList = [...bySlug].map(([value, title]) => ({
+    value, label: title
+  })).sort((a, b) =>
+    a.label.localeCompare(b.label, "ru") ||
+    a.value.localeCompare(b.value, "ru")
+  );
+  const sizeList = [...sizes].map(size => ({
+    value: "size:" + size,
+    label: size || "Без размера"
+  })).sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+  return `
+    <form method="GET" action="/developers#stock" class="filters-form">
+      ${retainFilters(filters, "stock_")}
+      <div class="filters-grid">
+        <div class="filter-field">
+          <label for="stock-product">Товар</label>
+          <select id="stock-product" name="stock_product">
+            ${optionHtml(productsList, filters.stock_product, "Все товары")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="stock-size">Размер</label>
+          <select id="stock-size" name="stock_size">
+            ${optionHtml(sizeList, filters.stock_size, "Все размеры")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="stock-reserved">Резерв</label>
+          <select id="stock-reserved" name="stock_reserved">
+            ${optionHtml([
+              {value:"yes", label:"Есть резерв"},
+              {value:"no", label:"Без резерва"}
+            ], filters.stock_reserved, "Любой резерв")}
+          </select>
+        </div>
+        <div class="filter-controls">
+          <button type="submit" class="blue-button">Найти</button>
+          <a href="/developers#stock" class="filter-reset">Сбросить все</a>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+function renderOrderFilters(options, filters) {
+  return `
+    <form method="GET" action="/developers#orders" class="filters-form">
+      ${retainFilters(filters, "order_")}
+      <div class="filters-grid">
+        <div class="filter-field">
+          <label for="order-number">Номер заказа</label>
+          <input id="order-number" type="search" name="order_number"
+            value="${esc(filters.order_number)}" maxlength="80"
+            placeholder="Например, FO-2026…">
+        </div>
+        <div class="filter-field">
+          <label for="order-status">Статус заказа</label>
+          <select id="order-status" name="order_status">
+            ${optionHtml(options.statuses.map(status => ({
+              value: status, label: orderStatusLabel(status)
+            })), filters.order_status, "Любой статус")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="order-shipping">Статус отправки</label>
+          <select id="order-shipping" name="order_shipping">
+            ${optionHtml(options.shipping.map(status => ({
+              value: status,
+              label: status === "shipped" ? "Отправлено" :
+                status === "not_shipped" ? "Не отправлено" : status
+            })), filters.order_shipping, "Любая отправка")}
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="order-product">Товар в заказе</label>
+          <select id="order-product" name="order_product">
+            ${optionHtml(options.products.map(title => ({
+              value: title, label: title
+            })), filters.order_product, "Все товары")}
+          </select>
+        </div>
+        <div class="filter-controls">
+          <button type="submit" class="blue-button">Найти</button>
+          <a href="/developers#orders" class="filter-reset">Сбросить все</a>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+async function orderFilterOptions(env) {
+  const db = database(env);
+  const [statuses, shipping, products] = await Promise.all([
+    db.prepare("SELECT DISTINCT status FROM orders ORDER BY status").all(),
+    db.prepare("SELECT DISTINCT shipping_status FROM orders ORDER BY shipping_status").all(),
+    db.prepare(
+      "SELECT DISTINCT product_title FROM order_items ORDER BY product_title"
+    ).all()
+  ]);
+  return {
+    statuses: (statuses.results || []).map(x => String(x.status)),
+    shipping: (shipping.results || []).map(x => String(x.shipping_status)),
+    products: (products.results || []).map(x => String(x.product_title))
+  };
 }
 
 /* РУЧНАЯ СИНХРОНИЗАЦИЯ */
@@ -1163,9 +1345,9 @@ function getProductTitle(item, names) {
     || item.product_slug;
 }
 
-function renderInventory(rows, products, csrf) {
+function renderInventory(rows, products, csrf, formAction = "/developers") {
   if (!rows.length) {
-    return `<p class="muted">Склад пока пуст.</p>`;
+    return `<p class="muted">По выбранным условиям складских позиций не найдено.</p>`;
   }
 
   const names = productNames(products);
@@ -1192,7 +1374,7 @@ function renderInventory(rows, products, csrf) {
         </td>
 
         <td>
-          <form method="POST" action="/developers"
+          <form method="POST" action="${esc(formAction)}"
                 class="inline-form">
             ${hidden("action", "stock-save")}
             ${hidden("csrf", csrf)}
@@ -1215,7 +1397,7 @@ function renderInventory(rows, products, csrf) {
         </td>
 
         <td>
-          <form method="POST" action="/developers">
+          <form method="POST" action="${esc(formAction)}">
             ${hidden("action", "stock-delete-request")}
             ${hidden("csrf", csrf)}
             ${hidden("product_slug", slug)}
@@ -1249,7 +1431,7 @@ function renderInventory(rows, products, csrf) {
   `;
 }
 
-function renderExcluded(rows, products, csrf) {
+function renderExcluded(rows, products, csrf, formAction = "/developers") {
   if (!rows.length) return "";
 
   const names = productNames(products);
@@ -1262,7 +1444,7 @@ function renderExcluded(rows, products, csrf) {
       </td>
       <td>${esc(item.size || "Без размера")}</td>
       <td>
-        <form method="POST" action="/developers">
+        <form method="POST" action="${esc(formAction)}">
           ${hidden("action", "stock-restore")}
           ${hidden("csrf", csrf)}
           ${hidden("product_slug", item.product_slug)}
@@ -1329,6 +1511,10 @@ async function dashboard(context, secret, options = {}) {
   let excluded = [];
   let products = [];
   let orders = [];
+  let orderChoices = { statuses: [], shipping: [], products: [] };
+  const filters = readDashboardFilters(context.request);
+  const query = filteredQuery(filters);
+  const formAction = "/developers" + (query ? "?" + query : "");
   const problems = [];
 
   try {
@@ -1349,7 +1535,8 @@ async function dashboard(context, secret, options = {}) {
   }
 
   try {
-    orders = await recentOrders(context.env);
+    orders = await recentOrders(context.env, filters);
+    orderChoices = await orderFilterOptions(context.env);
   } catch (error) {
     console.error(error);
     problems.push("Не удалось загрузить список заказов.");
@@ -1403,8 +1590,18 @@ async function dashboard(context, secret, options = {}) {
 
     ${renderReport(options.report)}
 
-    <section class="section">
+    <section class="section" id="stock">
       <h3>Складские остатки</h3>
+      <p class="muted">
+        Фильтры обновляются из текущего склада и каталога товаров.
+        Названия и размеры появятся автоматически после синхронизации.
+      </p>
+      ${renderStockFilters(stock, products, filters)}
+      <p class="muted">
+        Найдено позиций: ${number(filterStockRows(stock, products, filters).length)}.
+        Показатели «На складе / В резерве / Доступно» выше — общие,
+        без учёта фильтра.
+      </p>
 
       <div class="sync-area">
         <p class="muted">
@@ -1412,7 +1609,7 @@ async function dashboard(context, secret, options = {}) {
           Удалённые позиции не создаются повторно.
         </p>
 
-        <form method="POST" action="/developers">
+        <form method="POST" action="${esc(formAction)}#stock">
           ${hidden("action", "sync")}
           ${hidden("csrf", csrf)}
 
@@ -1422,7 +1619,7 @@ async function dashboard(context, secret, options = {}) {
         </form>
       </div>
 
-      ${renderInventory(stock, products, csrf)}
+      ${renderInventory(filterStockRows(stock, products, filters), products, csrf, formAction)}
 
       <p class="muted">
         Удаление требует подтверждения.
@@ -1431,19 +1628,21 @@ async function dashboard(context, secret, options = {}) {
       </p>
     </section>
 
-    ${renderExcluded(excluded, products, csrf)}
+    ${renderExcluded(excluded, products, csrf, formAction)}
 
     <section class="section" id="orders">
       <div class="order-header">
         <h3>Заказы (${orders.length})</h3>
-        <a class="order-refresh" href="/developers#orders">↻ Обновить</a>
+        <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
       </div>
       <p class="muted">
-        Последние 100 заказов. Нажми на номер,
-        чтобы увидеть состав, размеры и сумму.
-        Резервирование, оплата и отмена — следующий этап.
+        Поиск и фильтры работают по всей базе заказов.
+        Показаны до 100 последних совпадений.
+        Список статусов и товаров составляется из D1 автоматически.
       </p>
-      ${renderOrders(orders, csrf)}
+      ${renderOrderFilters(orderChoices, filters)}
+      <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
+      ${renderOrders(orders, csrf, formAction)}
     </section>
 
     <form method="POST" action="/developers">
@@ -1678,6 +1877,49 @@ td small {
   border: 1px solid #cbd5df;
   border-radius: 9px;
   padding: 14px;
+}
+.filters-form {
+  background: #f7fafc;
+  border: 1px solid #dce5eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.filters-grid {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.filter-field { flex: 1 1 160px; min-width: 145px; }
+.filter-field label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #506574;
+}
+.filter-field select, .filter-field input[type="search"] {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 9px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  background: #fff;
+  color: #14283a;
+  font: inherit;
+  font-size: 14px;
+}
+.filter-controls {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 1px;
+}
+.filter-reset {
+  color: #146789;
+  text-decoration: none;
+  font-size: 13px;
 }
 .order-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
 .order-refresh { color: #146789; text-decoration: none; font-size: 14px; }
