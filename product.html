@@ -1,0 +1,379 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Товар — Клуб «5 океанов»</title>
+
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #f5f7fa;
+  color: #14283a;
+  font-family: Arial, sans-serif;
+}
+a { color: inherit; text-decoration: none; }
+header {
+  background: #102c43;
+  color: white;
+  padding: 22px 6%;
+}
+nav {
+  max-width: 1150px;
+  margin: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+main {
+  max-width: 1150px;
+  margin: 35px auto;
+  padding: 20px;
+}
+.product {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+.main-photo {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: white;
+  border-radius: 12px;
+}
+.thumbnails {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.thumbnails button {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  background: white;
+}
+.thumbnails button.active {
+  border-color: #146789;
+}
+.thumbnails img {
+  width: 75px;
+  height: 75px;
+  object-fit: contain;
+}
+h1 { font-size: 32px; }
+.description {
+  line-height: 1.7;
+  white-space: pre-line;
+}
+.price {
+  font-size: 28px;
+  font-weight: bold;
+  margin: 24px 0;
+}
+.sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 25px;
+}
+.size {
+  padding: 12px 16px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+.size.selected {
+  background: #102c43;
+  color: white;
+}
+.quantity {
+  width: 90px;
+  padding: 12px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  font-size: 16px;
+}
+.add-cart {
+  display: block;
+  width: 100%;
+  max-width: 350px;
+  padding: 16px;
+  margin-top: 25px;
+  border: 0;
+  border-radius: 9px;
+  background: #102c43;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+.add-cart:disabled {
+  background: #aab5bd;
+  cursor: not-allowed;
+}
+.message {
+  margin-top: 15px;
+  color: #28734a;
+}
+footer {
+  text-align: center;
+  padding: 40px;
+  color: #71808e;
+}
+@media (max-width: 700px) {
+  .product {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+</style>
+</head>
+
+<body>
+<header>
+  <nav>
+    <a href="/"><strong>5 ОКЕАНОВ</strong></a>
+    <a href="/">← На главную</a>
+  </nav>
+</header>
+
+<main>
+  <div id="content">Загружаем товар...</div>
+</main>
+
+<footer>Клуб «5 океанов»</footer>
+
+<script>
+const slug = new URLSearchParams(
+  window.location.search
+).get("slug");
+
+const content = document.getElementById("content");
+const CART_KEY = "five-oceans-cart-v1";
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+async function loadProduct() {
+  try {
+    const response = await fetch(
+      "/data/products.json",
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) throw new Error("Ошибка загрузки");
+
+    const products = await response.json();
+    const product = products.find(p => p.slug === slug);
+
+    if (!product) {
+      content.textContent = "Товар не найден.";
+      return;
+    }
+
+    document.title = product.title + " — 5 океанов";
+    content.replaceChildren();
+
+    const layout = el("div", "product");
+    const gallery = el("div");
+    const details = el("div");
+
+    // Фотографии товара
+    const photos = Array.isArray(product.photos)
+      ? product.photos.filter(Boolean) : [];
+
+    if (photos.length) {
+      const mainImage = document.createElement("img");
+      mainImage.className = "main-photo";
+      mainImage.src = photos[0];
+      mainImage.alt = product.title;
+      gallery.appendChild(mainImage);
+
+      const thumbnails = el("div", "thumbnails");
+
+      photos.forEach((photo, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+
+        if (index === 0) button.classList.add("active");
+
+        const image = document.createElement("img");
+        image.src = photo;
+        image.alt = "Фото " + (index + 1);
+
+        button.appendChild(image);
+
+        button.addEventListener("click", () => {
+          mainImage.src = photo;
+          thumbnails.querySelectorAll("button")
+            .forEach(b => b.classList.remove("active"));
+          button.classList.add("active");
+        });
+
+        thumbnails.appendChild(button);
+      });
+
+      gallery.appendChild(thumbnails);
+    } else {
+      gallery.appendChild(
+        el("p", "", "Фотография пока отсутствует")
+      );
+    }
+
+    // Название, описание, цена
+    details.appendChild(el("h1", "", product.title));
+
+    if (product.description) {
+      details.appendChild(
+        el("p", "description", product.description)
+      );
+    }
+
+    if (product.price != null) {
+      const price = new Intl.NumberFormat("ru-RU", {
+        style: "currency",
+        currency: "RUB",
+        maximumFractionDigits: 0
+      }).format(product.price);
+
+      details.appendChild(el("div", "price", price));
+    }
+
+    const available = product.available === true;
+
+    details.appendChild(
+      el("p", "", available ? "В наличии" : "Нет в наличии")
+    );
+
+    // Выбор размера
+    const sizes = Array.isArray(product.sizes)
+      ? product.sizes.filter(Boolean) : [];
+
+    let selectedSize = null;
+
+    if (sizes.length) {
+      details.appendChild(el("h3", "", "Выберите размер"));
+
+      const sizeButtons = el("div", "sizes");
+
+      sizes.forEach(size => {
+        const button = el("button", "size", size);
+        button.type = "button";
+        button.disabled = !available;
+
+        button.addEventListener("click", () => {
+          selectedSize = size;
+
+          sizeButtons.querySelectorAll("button")
+            .forEach(b => b.classList.remove("selected"));
+
+          button.classList.add("selected");
+        });
+
+        sizeButtons.appendChild(button);
+      });
+
+      details.appendChild(sizeButtons);
+    }
+
+    // Количество
+    details.appendChild(el("h3", "", "Количество"));
+
+    const quantity = document.createElement("input");
+    quantity.type = "number";
+    quantity.min = "1";
+    quantity.max = "99";
+    quantity.step = "1";
+    quantity.value = "1";
+    quantity.className = "quantity";
+    quantity.disabled = !available;
+
+    details.appendChild(quantity);
+
+    // Добавление в корзину
+    const addButton = el(
+      "button", "add-cart", "Добавить в корзину"
+    );
+
+    addButton.disabled = !available;
+
+    const message = el("p", "message");
+
+    addButton.addEventListener("click", () => {
+      message.textContent = "";
+
+      if (sizes.length && !selectedSize) {
+        message.textContent = "Сначала выберите размер.";
+        return;
+      }
+
+      const count = Number(quantity.value);
+
+      if (!Number.isInteger(count) ||
+          count < 1 || count > 99) {
+        message.textContent =
+          "Укажите количество от 1 до 99.";
+        return;
+      }
+
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem(CART_KEY) || "[]"
+        );
+
+        const cart = Array.isArray(saved) ? saved : [];
+
+        const existing = cart.find(item =>
+          item.slug === product.slug &&
+          item.size === selectedSize
+        );
+
+        if (existing) {
+          existing.quantity =
+            Math.min(99, existing.quantity + count);
+        } else {
+          cart.push({
+            slug: product.slug,
+            size: selectedSize,
+            quantity: count
+          });
+        }
+
+        localStorage.setItem(
+          CART_KEY, JSON.stringify(cart)
+        );
+
+        message.textContent = "Товар добавлен в корзину!";
+      } catch (error) {
+        message.textContent =
+          "Не удалось сохранить корзину в браузере.";
+      }
+    });
+
+    details.appendChild(addButton);
+    details.appendChild(message);
+
+    layout.appendChild(gallery);
+    layout.appendChild(details);
+    content.appendChild(layout);
+
+  } catch (error) {
+    content.textContent =
+      "Не удалось загрузить информацию о товаре.";
+    console.error(error);
+  }
+}
+
+loadProduct();
+</script>
+</body>
+</html>
