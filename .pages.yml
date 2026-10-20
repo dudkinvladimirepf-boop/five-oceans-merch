@@ -31,7 +31,9 @@ content:
       - name: slug
         label: Адрес товара
         type: string
-        description: Уникальное название латиницей, без пробелов
+        required: true
+        pattern: "^[a-z0-9][a-z0-9_-]*$"
+        description: Уникальный адрес латиницей, без пробелов (например futbolka-okean). Не меняйте его после публикации.
 
       - name: description
         label: Описание
@@ -42,8 +44,23 @@ content:
         type: number
 
       - name: category
-        label: Категория
-        type: string
+        label: Категория товара
+        type: select
+        required: true
+        description: Выберите раздел — товар автоматически появится в нём на сайте.
+        options:
+          placeholder: Выберите категорию
+          values:
+            - name: футболки
+              label: Футболки и лонгсливы
+            - name: свитшоты
+              label: Толстовки и куртки
+            - name: носки
+              label: Носки
+            - name: головные-уборы
+              label: Головные уборы
+            - name: аксессуары
+              label: Аксессуары и сувениры
 
       - name: photos
         label: Фотографии
