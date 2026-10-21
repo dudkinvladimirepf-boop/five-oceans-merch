@@ -25,7 +25,12 @@
           </a>
         </div>
         <div class="nav-links">
-          <a href="/#catalog">Каталог ▾</a>
+          <details class="nav-catalog">
+            <summary>Каталог <span aria-hidden="true">⌄</span></summary>
+            <div class="nav-catalog-menu" id="nav-catalog-menu">
+              <a href="/#catalog">Все категории</a>
+            </div>
+          </details>
           <a href="/#contacts">Контакты</a>
         </div>
         <div class="site-actions menu">
@@ -43,6 +48,31 @@
           <!-- Кнопка корзины добавляется рабочим cart-nav.js -->
         </div>
       </nav>`;
+  }
+
+  // Меню категорий читает тот же файл Pages CMS, что и каталог.
+  // Новые или переименованные категории появляются без правок HTML.
+  if (header) {
+    fetch("/data/categories.json", {cache:"no-store"})
+      .then(response => {
+        if (!response.ok) throw new Error("Категории временно недоступны");
+        return response.json();
+      })
+      .then(categories => {
+        if (!Array.isArray(categories)) return;
+        const menu = header.querySelector("#nav-catalog-menu");
+        if (!menu) return;
+        for (const category of categories) {
+          if (!category || typeof category.slug !== "string" || !category.slug) {
+            continue;
+          }
+          const link = document.createElement("a");
+          link.href = "/category.html?slug=" + encodeURIComponent(category.slug);
+          link.textContent = category.title || category.slug;
+          menu.appendChild(link);
+        }
+      })
+      .catch(() => {}); // Рабочая ссылка «Все категории» остаётся доступной.
   }
 
   let footer = document.querySelector("body > footer");
