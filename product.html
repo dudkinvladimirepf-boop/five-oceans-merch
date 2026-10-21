@@ -396,6 +396,11 @@ footer {
 </header>
 
 <main>
+  <nav class="page-back-nav" aria-label="Вернуться к товарам">
+    <a id="back-to-category" class="quiet-back" href="/#catalog">
+      ← К категориям
+    </a>
+  </nav>
   <div id="content">Загружаем товар...</div>
 </main>
 
@@ -622,6 +627,35 @@ async function loadProduct() {
 
     document.title =
       product.title + " — Клуб «5 океанов»";
+
+    /*
+      Категорию ищем в актуальном Pages CMS.
+      Эта навигация никак не влияет на загрузку карточки и корзину.
+      Если данные категории недоступны, ссылка «К категориям»
+      остаётся рабочей.
+    */
+    const backToCategory = document.getElementById("back-to-category");
+    fetch("/data/categories.json", { cache: "no-store" })
+      .then(response => {
+        if (!response.ok) throw new Error("Категории недоступны");
+        return response.json();
+      })
+      .then(categories => {
+        if (!Array.isArray(categories)) return;
+        const category = categories.find(
+          entry => entry && entry.id === product.category
+        );
+        if (!category || !category.slug) return;
+        backToCategory.href = "/category.html?slug=" +
+          encodeURIComponent(category.slug);
+        backToCategory.textContent = "← " + category.title;
+        backToCategory.setAttribute(
+          "aria-label", "Вернуться в категорию «" + category.title + "»"
+        );
+      })
+      .catch(() => {
+        // Ссылка на общий каталог остаётся доступной.
+      });
 
     content.replaceChildren();
 
