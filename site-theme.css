@@ -94,6 +94,12 @@ body .hero-button,body .telegram-button,body .checkout-button {
 body .hero-button:hover,body .telegram-button:not(:disabled):hover {
   background:#a50868!important; transform:translateY(-1px);
 }
+body .telegram-button:disabled,body .add-button:disabled {
+  background:#aab5bd!important; cursor:not-allowed; transform:none!important;
+}
+body .add-button:not(:disabled):hover { background:#a50868!important; }
+body .secondary-button,body .chat-link { border-radius:10px; }
+.site-footer .footer-brand { padding:4px 8px; border-radius:9px; background:rgba(255,255,255,.95); }
 body .hero-button { display:inline-flex; justify-content:center; align-items:center; gap:14px; padding:14px 27px; margin-top:10px; }
 .home-page .hero {
   position:relative; min-height:440px; color:white!important; text-align:left!important;
