@@ -31,7 +31,7 @@
               <a href="/#catalog">Все категории</a>
             </div>
           </details>
-          <a href="/#contacts">Контакты</a>
+          <a href="/contacts.html">Контакты</a>
         </div>
         <div class="site-actions menu">
           <form class="site-search" action="/search.html" method="GET"
@@ -93,11 +93,12 @@
         <img class="oceanhd-logo" src="/media/oceanhdlogo.png"
              alt="ОКЕАН HD" width="123" height="35">
       </div>
-      <div class="footer-links">
-        <a href="/#catalog">Каталог</a>
-        <a href="/#contacts">Контакты</a>
-      </div>
-      <div class="footer-socials" aria-label="Социальные сети: ссылки добавим позже">
+      <div class="footer-center">
+        <div class="footer-links">
+          <a href="/#catalog">Каталог</a>
+          <a href="/contacts.html">Контакты</a>
+        </div>
+        <div class="footer-socials" aria-label="Социальные сети: ссылки добавим позже">
         <span class="social-placeholder" aria-label="YouTube, ссылка появится позже" title="YouTube — ссылка появится позже">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 6 3-6 3Z" fill="#111f3e"/></svg>
         </span>
@@ -108,6 +109,7 @@
         <span class="social-placeholder" aria-label="Instagram, ссылка появится позже" title="Instagram — ссылка появится позже">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.7" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg>
         </span>
+        </div>
       </div>
       <div class="footer-note">
         © 2026 Клуб 5 океанов × ОКЕАН HD
