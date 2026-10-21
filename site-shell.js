@@ -77,43 +77,6 @@
       .catch(() => {}); // Рабочая ссылка «Все категории» остаётся доступной.
   }
 
-  // Тихая навигация: назад именно в список категорий / категорию.
-  const main = document.querySelector("body > main");
-  if (main && (path === "/category.html" || path === "/product.html")) {
-    const backNav = document.createElement("nav");
-    backNav.className = "page-back-nav";
-    backNav.setAttribute("aria-label", "Вернуться к каталогу");
-    const back = document.createElement("a");
-    back.className = "quiet-back";
-    back.href = "/#catalog";
-    back.textContent = "← К категориям";
-    backNav.appendChild(back);
-    main.prepend(backNav);
-
-    if (path === "/product.html") {
-      const slug = new URLSearchParams(location.search).get("slug");
-      if (slug) {
-        Promise.all([
-          fetch("/data/products.json", {cache:"no-store"}),
-          fetch("/data/categories.json", {cache:"no-store"})
-        ]).then(async responses => {
-          if (responses.some(response => !response.ok)) return;
-          const [products,categories] = await Promise.all(responses.map(r => r.json()));
-          if (!Array.isArray(products) || !Array.isArray(categories)) return;
-          const product = products.find(p => p.slug === slug);
-          if (!product) return;
-          const category = categories.find(c => c.id === product.category);
-          if (!category || !category.slug) return;
-          back.href = "/category.html?slug=" + encodeURIComponent(category.slug);
-          back.textContent = "← " + category.title;
-          backNav.setAttribute("aria-label", "Вернуться в категорию");
-        }).catch(() => {
-          // Сохраняем доступную и корректную ссылку «К категориям».
-        });
-      }
-    }
-  }
-
   let footer = document.querySelector("body > footer");
   if (!footer) {
     footer = document.createElement("footer");
