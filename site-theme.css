@@ -401,3 +401,80 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-footer .footer-content { justify-content:center; text-align:center; }
  .site-footer .footer-developers { margin:auto; }
 }
+
+
+/* Коррекция по дизайну: реальные цвета логотипов, прозрачная подложка */
+.site-footer .footer-brand img,
+.site-footer .footer-brand .oceanhd-logo {
+  filter:none!important;
+  mix-blend-mode:normal!important;
+}
+.site-footer .footer-meta {
+  justify-self:end;
+  text-align:right;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:4px;
+  min-width:0;
+}
+.site-footer .footer-meta .footer-note {
+  justify-self:auto;
+  text-align:right;
+  margin:0;
+}
+.site-footer .footer-meta .footer-developers {
+  display:inline-block;
+  grid-column:auto;
+  justify-self:auto;
+  align-self:flex-end;
+  margin:0;
+  padding:2px 0;
+  font-size:9px!important;
+  font-weight:400;
+  letter-spacing:.01em;
+  color:#98b6ca;
+  opacity:.65;
+  text-decoration:none;
+}
+.site-footer .footer-meta .footer-developers:hover {
+  opacity:1;
+  color:#fff;
+  text-decoration:underline;
+}
+.page-back-nav {
+  margin:0 0 24px;
+  line-height:1.5;
+}
+.page-back-nav .quiet-back {
+  display:inline-flex;
+  align-items:center;
+  color:#70829b;
+  text-decoration:none;
+  font-size:13px;
+  font-weight:400;
+  padding:4px 0;
+  transition:color .15s ease;
+}
+.page-back-nav .quiet-back:hover,
+.page-back-nav .quiet-back:focus-visible {color:#c00c79;}
+.page-back-nav .quiet-back:focus-visible {
+  outline:2px solid #c00c79; outline-offset:4px;
+}
+@media (max-width:1100px) {
+  .site-footer .footer-meta {
+    grid-column:1/-1;
+    justify-self:end;
+  }
+  .site-footer .footer-meta .footer-note {text-align:right;}
+}
+@media (max-width:650px) {
+  .site-footer .footer-meta {
+    grid-column:1!important;
+    justify-self:center!important;
+    text-align:center;
+    align-items:center;
+  }
+  .site-footer .footer-meta .footer-note {text-align:center!important;}
+  .site-footer .footer-meta .footer-developers {align-self:center;}
+}
