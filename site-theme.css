@@ -487,3 +487,128 @@ body:not(.home-page) .category-promo { color:var(--muted); }
   .site-footer .footer-meta .footer-note {text-align:center!important;}
   .site-footer .footer-meta .footer-developers {align-self:center;}
 }
+
+
+/* Соцсети: выбор страницы клуба или телеканала при наведении/тапе. */
+.site-footer {
+  overflow:visible!important;
+  z-index:5;
+}
+.site-footer::before {
+  /* Декоративные волны остаются внутри подвала и не создают прокрутку. */
+  right:0!important;
+  bottom:0!important;
+  width:100%!important;
+  height:100%!important;
+  transform:none!important;
+  pointer-events:none;
+}
+.site-footer .footer-socials {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:9px;
+}
+.site-footer .social-dropdown {
+  position:relative;
+  flex:0 0 auto;
+}
+.site-footer .social-dropdown::before {
+  content:"";
+  position:absolute;
+  left:-7px;
+  right:-7px;
+  bottom:100%;
+  height:12px;
+}
+.site-footer .social-trigger {
+  width:32px;
+  height:32px;
+  padding:0;
+  border:1px solid #7f9cba;
+  border-radius:9px;
+  background:transparent;
+  color:#f0f6fc;
+  font:700 13px 'Geologica',Arial,sans-serif;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  transition:background .15s ease,border-color .15s ease;
+}
+.site-footer .social-trigger svg { width:17px; height:17px; }
+.site-footer .social-trigger:hover,
+.site-footer .social-dropdown.is-open .social-trigger {
+  background:#18466c;
+  border-color:#a6d7e6;
+}
+.site-footer .social-trigger:focus-visible {
+  outline:2px solid #f0a5d0;
+  outline-offset:3px;
+}
+.site-footer .social-popup {
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 10px);
+  width:230px;
+  max-width:calc(100vw - 26px);
+  transform:translate(-50%,5px);
+  padding:9px;
+  background:#fff;
+  color:#1e2c53;
+  border:1px solid #dfe7f0;
+  border-radius:12px;
+  box-shadow:0 14px 40px rgba(5,23,42,.25);
+  text-align:left;
+  z-index:80;
+  visibility:hidden;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .13s ease,transform .13s ease,visibility .13s;
+}
+.site-footer .social-popup-title {
+  display:block;
+  padding:6px 10px 8px;
+  font:600 11px 'Geologica',Arial,sans-serif;
+  color:#657e94;
+  letter-spacing:.03em;
+}
+.site-footer .social-popup a {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:11px 10px;
+  border-radius:8px;
+  color:#1e2c53;
+  font:500 12px 'Geologica',Arial,sans-serif;
+  line-height:1.35;
+  text-decoration:none;
+  white-space:normal;
+}
+.site-footer .social-popup a:hover,
+.site-footer .social-popup a:focus-visible {
+  color:#c00c79;
+  background:#fbedf6;
+}
+.site-footer .social-popup a span {
+  color:#c00c79;
+  font-size:15px;
+}
+.site-footer .social-dropdown.is-open .social-popup,
+.site-footer .social-dropdown:focus-within .social-popup {
+  visibility:visible;
+  opacity:1;
+  pointer-events:auto;
+  transform:translate(-50%,0);
+}
+@media (hover:hover) and (pointer:fine) {
+  .site-footer .social-dropdown:hover .social-popup {
+    visibility:visible;
+    opacity:1;
+    pointer-events:auto;
+    transform:translate(-50%,0);
+  }
+}
+@media (max-width:650px) {
+  .site-footer .social-popup { width:210px; }
+}
