@@ -36,12 +36,14 @@
         <div class="site-actions menu">
           <form class="site-search" action="/search.html" method="GET"
                 role="search">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.8"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="10.8" cy="10.8" r="6.8"/>
-              <path d="m16 16 5 5"/>
-            </svg>
+            <button type="submit" class="search-submit" aria-label="Искать товары">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="10.8" cy="10.8" r="6.8"/>
+                <path d="m16 16 5 5"/>
+              </svg>
+            </button>
             <input type="search" name="q" maxlength="100"
                    aria-label="Поиск товаров" placeholder="Поиск товаров...">
           </form>
