@@ -70,8 +70,8 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
     const categoryNames = new Map(categories.map(c=>[normalize(c.id),c.title]));
     const visible = products.filter(p=>{
       if (!p || !p.slug) return false;
-      if (collection === "new" && p.new_arrival !== true) return false;
-      if (collection === "featured" && p.featured !== true) return false;
+      if (collection === "new" && (p.new_arrival !== true || p.available !== true)) return false;
+      if (collection === "featured" && (p.featured !== true || p.available !== true)) return false;
       if (!searchTerm) return true;
       const combined = [
         p.title,p.description,p.slug,
@@ -85,7 +85,6 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
       results.textContent = "По этому запросу товары не найдены.";
       return;
     }
-    const count = document.createElement("span");
     description.append(" · " + visible.length + " шт.");
     for (const product of visible) {
       const card = document.createElement("a");
