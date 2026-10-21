@@ -61,6 +61,12 @@ body > header.site-header {
   min-width:0; width:min(270px,100%); height:39px; margin:0;
 }
 .site-header .site-search svg { flex:none; width:18px; height:18px; }
+.site-header .search-submit {
+  display:grid; place-items:center; background:transparent; color:var(--navy);
+  border:0; border-radius:50%; padding:2px; cursor:pointer; flex:none;
+}
+.site-header .search-submit:hover { color:var(--fuchsia); }
+
 .site-header .site-search input {
   flex:1; min-width:0; width:100%; border:0; outline:0;
   background:transparent; font:400 12px 'Geologica',Arial,sans-serif;
