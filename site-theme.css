@@ -113,11 +113,12 @@ body .hero-button { display:inline-flex; justify-content:center; align-items:cen
   overflow:hidden;
   background-image:
     linear-gradient(90deg,rgba(0,19,40,.94) 0%,rgba(0,25,48,.68) 31%,rgba(0,30,57,.06) 78%),
+    url("/media/whale-hero-hd.svg"),
     url("/media/whale-from-mockup.svg")!important;
   background-color:#042846!important;
   background-repeat:no-repeat!important;
-  background-size:cover,cover!important;
-  background-position:center,center 46%!important;
+  background-size:cover,cover,cover!important;
+  background-position:center,center 46%,center 46%!important;
 }
 .home-page .hero::after {
   content:""; position:absolute; inset:auto 0 0; height:4px;
@@ -384,7 +385,7 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-header .site-search input { font-size:11px; }
  .site-header .global-cart-link .cart-word { display:none; }
  .site-header .global-cart-link { margin-left:6px!important; }
- .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center!important; }
+ .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center,58% center!important; }
  .home-page .hero h1 { font-size:46px; }
  .home-page .hero p { max-width:335px; }
  .home-page .hero-sign { display:none; }
@@ -400,4 +401,81 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .home-page .about { padding:22px; }
  .site-footer .footer-content { justify-content:center; text-align:center; }
  .site-footer .footer-developers { margin:auto; }
+}
+
+
+/* Коррекция по дизайну: реальные цвета логотипов, прозрачная подложка */
+.site-footer .footer-brand img,
+.site-footer .footer-brand .oceanhd-logo {
+  filter:drop-shadow(0 0 2px rgba(255,255,255,.22))!important;
+  mix-blend-mode:normal!important;
+}
+.site-footer .footer-meta {
+  justify-self:end;
+  text-align:right;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:4px;
+  min-width:0;
+}
+.site-footer .footer-meta .footer-note {
+  justify-self:auto;
+  text-align:right;
+  margin:0;
+}
+.site-footer .footer-meta .footer-developers {
+  display:inline-block;
+  grid-column:auto;
+  justify-self:auto;
+  align-self:flex-end;
+  margin:0;
+  padding:2px 0;
+  font-size:9px!important;
+  font-weight:400;
+  letter-spacing:.01em;
+  color:#98b6ca;
+  opacity:.65;
+  text-decoration:none;
+}
+.site-footer .footer-meta .footer-developers:hover {
+  opacity:1;
+  color:#fff;
+  text-decoration:underline;
+}
+.page-back-nav {
+  margin:0 0 24px;
+  line-height:1.5;
+}
+.page-back-nav .quiet-back {
+  display:inline-flex;
+  align-items:center;
+  color:#70829b;
+  text-decoration:none;
+  font-size:13px;
+  font-weight:400;
+  padding:4px 0;
+  transition:color .15s ease;
+}
+.page-back-nav .quiet-back:hover,
+.page-back-nav .quiet-back:focus-visible {color:#c00c79;}
+.page-back-nav .quiet-back:focus-visible {
+  outline:2px solid #c00c79; outline-offset:4px;
+}
+@media (max-width:1100px) {
+  .site-footer .footer-meta {
+    grid-column:1/-1;
+    justify-self:end;
+  }
+  .site-footer .footer-meta .footer-note {text-align:right;}
+}
+@media (max-width:650px) {
+  .site-footer .footer-meta {
+    grid-column:1!important;
+    justify-self:center!important;
+    text-align:center;
+    align-items:center;
+  }
+  .site-footer .footer-meta .footer-note {text-align:center!important;}
+  .site-footer .footer-meta .footer-developers {align-self:center;}
 }

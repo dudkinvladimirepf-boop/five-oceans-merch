@@ -77,6 +77,43 @@
       .catch(() => {}); // Рабочая ссылка «Все категории» остаётся доступной.
   }
 
+  // Тихая навигация: назад именно в список категорий / категорию.
+  const main = document.querySelector("body > main");
+  if (main && (path === "/category.html" || path === "/product.html")) {
+    const backNav = document.createElement("nav");
+    backNav.className = "page-back-nav";
+    backNav.setAttribute("aria-label", "Вернуться к каталогу");
+    const back = document.createElement("a");
+    back.className = "quiet-back";
+    back.href = "/#catalog";
+    back.textContent = "← К категориям";
+    backNav.appendChild(back);
+    main.prepend(backNav);
+
+    if (path === "/product.html") {
+      const slug = new URLSearchParams(location.search).get("slug");
+      if (slug) {
+        Promise.all([
+          fetch("/data/products.json", {cache:"no-store"}),
+          fetch("/data/categories.json", {cache:"no-store"})
+        ]).then(async responses => {
+          if (responses.some(response => !response.ok)) return;
+          const [products,categories] = await Promise.all(responses.map(r => r.json()));
+          if (!Array.isArray(products) || !Array.isArray(categories)) return;
+          const product = products.find(p => p.slug === slug);
+          if (!product) return;
+          const category = categories.find(c => c.id === product.category);
+          if (!category || !category.slug) return;
+          back.href = "/category.html?slug=" + encodeURIComponent(category.slug);
+          back.textContent = "← " + category.title;
+          backNav.setAttribute("aria-label", "Вернуться в категорию");
+        }).catch(() => {
+          // Сохраняем доступную и корректную ссылку «К категориям».
+        });
+      }
+    }
+  }
+
   let footer = document.querySelector("body > footer");
   if (!footer) {
     footer = document.createElement("footer");
@@ -111,10 +148,66 @@
         </span>
         </div>
       </div>
-      <div class="footer-note">
-        © 2026 Клуб 5 океанов × ОКЕАН HD
-        <div class="footer-contacts">Вдохновение на большой глубине.</div>
+      <div class="footer-meta">
+        <div class="footer-note">
+          © 2026 Клуб 5 океанов × ОКЕАН HD
+          <div class="footer-contacts">Вдохновение на большой глубине.</div>
+        </div>
+        <a href="/developers" class="footer-developers">Для разработчиков</a>
       </div>
-      <a href="/developers" class="footer-developers">Для разработчиков</a>
     </div>`;
+
+  // Прозрачность подложек: удаляем только связанный с краями светлый фон.
+  // Замкнутые белые буквы внутри логотипа ОКЕАН HD оставляем белыми.
+  function removeFooterLogoBackground(img) {
+    const process = () => {
+      if (img.dataset.logoProcessed || !img.naturalWidth || !img.naturalHeight) {
+        return;
+      }
+      img.dataset.logoProcessed = "true";
+      try {
+        const canvas = document.createElement("canvas");
+        const w = img.naturalWidth, h = img.naturalHeight;
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d", {willReadFrequently:true});
+        if (!ctx) return;
+        ctx.drawImage(img,0,0);
+        const pixels = ctx.getImageData(0,0,w,h);
+        const data = pixels.data, pixelsCount = w*h;
+        const seen = new Uint8Array(pixelsCount);
+        const queue = new Uint32Array(pixelsCount);
+        let head=0, tail=0;
+        function isLight(i) {
+          const p = i*4;
+          return data[p+3] < 16 ||
+            (data[p] >= 243 && data[p+1] >= 243 && data[p+2] >= 243);
+        }
+        function enqueue(i) {
+          if (!seen[i] && isLight(i)) {
+            seen[i]=1; queue[tail++]=i;
+          }
+        }
+        for(let x=0;x<w;x++){ enqueue(x); enqueue((h-1)*w+x); }
+        for(let y=0;y<h;y++){ enqueue(y*w); enqueue(y*w+w-1); }
+        while(head<tail) {
+          const i=queue[head++];
+          if(i>=w) enqueue(i-w);
+          if(i+w<pixelsCount) enqueue(i+w);
+          if(i%w!==0) enqueue(i-1);
+          if(i%w!==w-1) enqueue(i+1);
+        }
+        for(let i=0;i<pixelsCount;i++){
+          if(seen[i]) data[i*4+3]=0;
+        }
+        ctx.putImageData(pixels,0,0);
+        img.src = canvas.toDataURL("image/png");
+      } catch (e) {
+        // Исходный цветной логотип остаётся доступен при ошибке canvas.
+        console.warn("Не удалось обработать фон логотипа", e);
+      }
+    };
+    if(img.complete) process();
+    else img.addEventListener("load",process,{once:true});
+  }
+  footer.querySelectorAll(".footer-brand img").forEach(removeFooterLogoBackground);
 })();
