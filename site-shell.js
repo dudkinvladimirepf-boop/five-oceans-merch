@@ -98,18 +98,54 @@
           <a href="/#catalog">Каталог</a>
           <a href="/contacts.html">Контакты</a>
         </div>
-        <div class="footer-socials" aria-label="Социальные сети: ссылки добавим позже">
-        <span class="social-placeholder" aria-label="YouTube, ссылка появится позже" title="YouTube — ссылка появится позже">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 6 3-6 3Z" fill="#111f3e"/></svg>
-        </span>
-        <span class="social-placeholder" aria-label="ВКонтакте, ссылка появится позже" title="ВКонтакте — ссылка появится позже">VK</span>
-        <span class="social-placeholder" aria-label="Telegram, ссылка появится позже" title="Telegram — ссылка появится позже">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.3 3.2 2.8 10.5c-1.1.4-1 1.1-.2 1.4l4.7 1.5 1.8 5.4c.2.6.1.8.8.8.5 0 .7-.2 1-.5l2.3-2.3 4.9 3.6c.9.5 1.5.3 1.8-.9l3-14c.4-1.5-.5-2-1.6-1.3Zm-4 4.2-7.6 7-.3 3.5-1.3-4.4 9.2-6.1Z"/></svg>
-        </span>
-        <span class="social-placeholder" aria-label="Instagram, ссылка появится позже" title="Instagram — ссылка появится позже">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.7" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg>
-        </span>
-        </div>
+        <nav class="footer-socials" aria-label="Социальные сети клуба и телеканала">
+          <div class="social-dropdown">
+            <button type="button" class="social-trigger" aria-expanded="false" aria-haspopup="true" aria-label="YouTube — выбрать страницу" title="YouTube">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="2" y="5" width="20" height="14" rx="4"/>
+                <path d="m10 9 6 3-6 3Z" fill="#111f3e"/>
+              </svg>
+            </button>
+            <div class="social-popup">
+              <span class="social-popup-title">YouTube</span>
+              <a href="https://www.youtube.com/@5oceansclub" target="_blank" rel="noopener noreferrer">Клуб «5 океанов» <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <div class="social-dropdown">
+            <button type="button" class="social-trigger" aria-expanded="false" aria-haspopup="true" aria-label="ВКонтакте — выбрать страницу" title="ВКонтакте">VK</button>
+            <div class="social-popup">
+              <span class="social-popup-title">ВКонтакте</span>
+              <a href="https://vk.ru/5oceans_club" target="_blank" rel="noopener noreferrer">Клуб «5 океанов» <span aria-hidden="true">↗</span></a>
+              <a href="https://vk.ru/oceanmediasu" target="_blank" rel="noopener noreferrer">Телеканал «ОКЕАН HD» <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <div class="social-dropdown">
+            <button type="button" class="social-trigger" aria-expanded="false" aria-haspopup="true" aria-label="Telegram — выбрать канал" title="Telegram">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M21.3 3.2 2.8 10.5c-1.1.4-1 1.1-.2 1.4l4.7 1.5 1.8 5.4c.2.6.1.8.8.8.5 0 .7-.2 1-.5l2.3-2.3 4.9 3.6c.9.5 1.5.3 1.8-.9l3-14c.4-1.5-.5-2-1.6-1.3Zm-4 4.2-7.6 7-.3 3.5-1.3-4.4 9.2-6.1Z"/>
+              </svg>
+            </button>
+            <div class="social-popup">
+              <span class="social-popup-title">Telegram</span>
+              <a href="https://t.me/five_oceans_club" target="_blank" rel="noopener noreferrer">Клуб «5 океанов» <span aria-hidden="true">↗</span></a>
+              <a href="https://t.me/okeanHD" target="_blank" rel="noopener noreferrer">Телеканал «ОКЕАН HD» <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <div class="social-dropdown">
+            <button type="button" class="social-trigger" aria-expanded="false" aria-haspopup="true" aria-label="Instagram — выбрать страницу" title="Instagram">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="5"/>
+                <circle cx="12" cy="12" r="4"/>
+                <circle cx="17.7" cy="6.7" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+            </button>
+            <div class="social-popup">
+              <span class="social-popup-title">Instagram</span>
+              <a href="https://www.instagram.com/5oceans_club?dlrf=MTBnaWhqd29zdDYzZg==" target="_blank" rel="noopener noreferrer">Клуб «5 океанов» <span aria-hidden="true">↗</span></a>
+              <a href="https://www.instagram.com/okean.hd?rpxt=MTY1Z3N3MGNrcHBzcA==" target="_blank" rel="noopener noreferrer">Телеканал «ОКЕАН HD» <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+        </nav>
       </div>
       <div class="footer-meta">
         <div class="footer-note">
@@ -172,5 +208,60 @@
     if(img.complete) process();
     else img.addEventListener("load",process,{once:true});
   }
+  // Наведение мышью показывает меню; на телефоне выбор открывается
+  // по нажатию. Enter/Space и Escape работают с клавиатуры.
+  const socialMenus = [...footer.querySelectorAll(".social-dropdown")];
+
+  function closeSocialMenu(menu) {
+    menu.classList.remove("is-open");
+    const trigger = menu.querySelector(".social-trigger");
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+  }
+
+  socialMenus.forEach(menu => {
+    const trigger = menu.querySelector(".social-trigger");
+    trigger.addEventListener("click", () => {
+      const shouldOpen = !menu.classList.contains("is-open");
+      socialMenus.forEach(closeSocialMenu);
+      if (shouldOpen) {
+        menu.classList.add("is-open");
+        trigger.setAttribute("aria-expanded", "true");
+      }
+    });
+    menu.addEventListener("pointerenter", event => {
+      if (event.pointerType === "mouse" || event.pointerType === "pen") {
+        socialMenus.filter(other => other !== menu).forEach(closeSocialMenu);
+        trigger.setAttribute("aria-expanded", "true");
+      }
+    });
+    menu.addEventListener("pointerleave", () => {
+      if (!menu.classList.contains("is-open") && !menu.contains(document.activeElement)) {
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+    menu.addEventListener("focusin", () => {
+      trigger.setAttribute("aria-expanded", "true");
+    });
+    menu.addEventListener("focusout", event => {
+      if (!menu.contains(event.relatedTarget) && !menu.classList.contains("is-open")) {
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+  });
+
+  document.addEventListener("pointerdown", event => {
+    if (!event.target.closest(".social-dropdown")) {
+      socialMenus.forEach(closeSocialMenu);
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      socialMenus.forEach(closeSocialMenu);
+      if (document.activeElement?.closest(".social-dropdown")) {
+        document.activeElement.blur();
+      }
+    }
+  });
+
   footer.querySelectorAll(".footer-brand img").forEach(removeFooterLogoBackground);
 })();
