@@ -30,6 +30,27 @@ body > header.site-header {
   color:var(--navy)!important; font-size:14px; font-weight:500; transition:color .2s;
 }
 .site-header .nav-links a:hover,.site-header nav .menu a:hover { color:var(--fuchsia)!important; }
+.site-header .nav-catalog { position:relative; }
+.site-header .nav-catalog summary {
+  color:var(--navy); font-size:14px; font-weight:500; cursor:pointer;
+  list-style:none; user-select:none; white-space:nowrap;
+}
+.site-header .nav-catalog summary::-webkit-details-marker { display:none; }
+.site-header .nav-catalog summary span { color:var(--fuchsia); padding-left:3px; }
+.site-header .nav-catalog summary:hover { color:var(--fuchsia); }
+.site-header .nav-catalog-menu {
+  position:absolute; top:calc(100% + 16px); left:-16px;
+  width:max-content; min-width:215px; max-width:320px; display:flex;
+  flex-direction:column; gap:0; padding:9px; z-index:30;
+  border:1px solid #e2e8ee; border-radius:12px; background:white;
+  box-shadow:0 15px 30px rgba(16,31,59,.15);
+}
+.site-header .nav-catalog:not([open]) .nav-catalog-menu { display:none; }
+.site-header .nav-catalog-menu a {
+  padding:10px 12px; border-radius:7px; font-size:13px!important;
+  white-space:normal; font-weight:400!important;
+}
+.site-header .nav-catalog-menu a:hover { background:#f6f0f7; }
 .site-header .site-actions.menu {
   display:flex; justify-content:flex-end; align-items:center; gap:20px;
   min-width:0; font-size:14px;
