@@ -450,15 +450,23 @@ body:not(.home-page) .category-promo { color:var(--muted); }
 .page-back-nav .quiet-back {
   display:inline-flex;
   align-items:center;
-  color:#70829b;
+  width:fit-content;
+  color:#536e89;
+  background:#f2f6f9;
+  border:1px solid #dce6ee;
+  border-radius:999px;
   text-decoration:none;
-  font-size:13px;
-  font-weight:400;
-  padding:4px 0;
-  transition:color .15s ease;
+  font-size:14px;
+  font-weight:500;
+  padding:9px 15px;
+  transition:color .15s ease,background .15s ease,border-color .15s ease;
 }
 .page-back-nav .quiet-back:hover,
-.page-back-nav .quiet-back:focus-visible {color:#c00c79;}
+.page-back-nav .quiet-back:focus-visible {
+  color:#c00c79;
+  background:#fdf3f9;
+  border-color:#eec9df;
+}
 .page-back-nav .quiet-back:focus-visible {
   outline:2px solid #c00c79; outline-offset:4px;
 }
