@@ -307,7 +307,7 @@ button {
       type="button"
       disabled
     >
-      Создать заказ и открыть Telegram
+      Создать заказ и перейти в Telegram-бот
     </button>
 
     <div class="actions">
@@ -323,11 +323,11 @@ button {
 
       <a
         class="chat-link"
-        href="https://t.me/okeanhd_5oceans_shop?direct"
+        href="https://t.me/okeanhd_5oceans_bot"
         target="_blank"
         rel="noopener noreferrer"
       >
-        Открыть чат магазина →
+        Открыть Telegram-бота без заказа →
       </a>
 
     </div>
@@ -340,8 +340,10 @@ button {
     <p class="note">
       При нажатии на кнопку оформления заказ сначала
       сохраняется в системе и получает номер.
-      Затем вставьте текст с этим номером в Telegram
-      и отправьте сообщение магазину.
+      Затем откроется Telegram-бот, которому номер заказа
+      будет передан через ссылку. В Telegram нажмите «Старт».
+      Пока бот не подключён к заказам с сайта, текст можно
+      скопировать и отправить ему вручную.
       Создание заказа не резервирует товар.
     </p>
 
@@ -351,8 +353,10 @@ button {
     <h2 id="recent-order-title">Заказ создан</h2>
     <p class="note">
       Последний заказ доступен здесь 10 минут после оформления,
-      в том числе после обновления страницы. Скопируйте текст
-      и отправьте его магазину в Telegram. Сам заказ остаётся в системе.
+      в том числе после обновления страницы. Нажмите «Перейти в Telegram-бот»,
+      чтобы передать ему номер заказа, затем нажмите «Старт».
+      Для резервного варианта можно скопировать текст заказа.
+      Сам заказ уже сохранён в системе.
       Для повторной покупки тех же товаров нажмите «Повторить заказ»:
       они вернутся в корзину, но новый заказ не создастся автоматически.
     </p>
@@ -365,8 +369,9 @@ button {
       <button id="repeat-order" class="secondary-button" type="button" hidden>
         Повторить заказ
       </button>
-      <a class="chat-link" href="https://t.me/okeanhd_5oceans_shop?direct"
-        target="_blank" rel="noopener noreferrer">Открыть чат магазина →</a>
+      <a id="recent-order-bot-link" class="chat-link"
+         href="https://t.me/okeanhd_5oceans_bot"
+         target="_blank" rel="noopener noreferrer">Перейти в Telegram-бот →</a>
     </div>
     <p id="recent-order-status" class="order-status"
       role="status" aria-live="polite"></p>
@@ -382,14 +387,27 @@ button {
 /*
   Корзина Клуба «5 океанов».
   Оформление создаёт реальный заказ в Cloudflare D1.
-  Номер заказа передаётся клиентом в Telegram.
+  Номер заказа передаётся Telegram-боту параметром start, без повторной регистрации заказа.
 */
 
 const CART_KEY = "five-oceans-cart-v1";
 const CHECKOUT_KEY = "five-oceans-checkout-v1";
 const RECENT_ORDER_KEY = "five-oceans-recent-order-v1";
 const RECENT_ORDER_TTL = 10 * 60 * 1000;
-const TELEGRAM_URL = "https://t.me/okeanhd_5oceans_shop?direct";
+const TELEGRAM_BOT_URL = "https://t.me/okeanhd_5oceans_bot";
+
+/*
+  Стандартная Telegram-ссылка запуска бота.
+  При /start бот получит аргумент "order_FO-YYYYMMDD-XXXXXXXXXXXX".
+  Параметр не является авторизацией и не содержит данных клиента.
+*/
+function telegramOrderUrl(orderId) {
+  if (!/^FO-\d{8}-[A-F0-9]{12}$/.test(String(orderId || ""))) {
+    return TELEGRAM_BOT_URL;
+  }
+  return TELEGRAM_BOT_URL + "?start=" +
+    encodeURIComponent("order_" + orderId);
+}
 
 const cartContainer = document.getElementById("cart");
 const summary = document.getElementById("summary");
@@ -405,6 +423,7 @@ const recentOrderPreview = document.getElementById("recent-order-preview");
 const recentOrderStatus = document.getElementById("recent-order-status");
 const recentOrderCopy = document.getElementById("recent-order-copy");
 const repeatOrderButton = document.getElementById("repeat-order");
+const recentOrderBotLink = document.getElementById("recent-order-bot-link");
 let recentOrderTimer;
 
 let cart = [];
@@ -574,6 +593,7 @@ function restoreRecentOrder() {
   recentOrderPreview.value = "";
   recentOrderStatus.textContent = "";
   repeatOrderButton.hidden = true;
+  recentOrderBotLink.href = TELEGRAM_BOT_URL;
 
   try {
     const saved = JSON.parse(localStorage.getItem(RECENT_ORDER_KEY) || "null");
@@ -586,6 +606,7 @@ function restoreRecentOrder() {
 
     recentOrderTitle.textContent = "Заказ № " + saved.order_id + " создан";
     recentOrderPreview.value = saved.text;
+    recentOrderBotLink.href = telegramOrderUrl(saved.order_id);
     recentOrderSection.hidden = false;
     repeatOrderButton.hidden = !validRepeatItems(saved.items);
     recentOrderTimer = setTimeout(restoreRecentOrder, saved.expiresAt - Date.now());
@@ -676,8 +697,8 @@ function updateOrderPreview(hasUnavailable) {
       : null;
 
   telegramButton.textContent = existing
-    ? "Скопировать и открыть Telegram"
-    : "Создать заказ и открыть Telegram";
+    ? "Перейти в Telegram-бот с заказом"
+    : "Создать заказ и перейти в Telegram-бот";
 
   copyButton.textContent = existing
     ? "Скопировать заказ"
@@ -1007,19 +1028,20 @@ async function handleCheckout(openTelegram) {
 
       recentOrderStatus.textContent =
         "Заказ № " + order.order_id +
-        " создан в системе, но браузер не разрешил " +
-        "копирование. Скопируйте выделенный текст " +
-        "вручную и откройте чат магазина.";
-      return;
+        " создан. Номер передаётся боту ссылкой. " +
+        "Текст не удалось скопировать автоматически — " +
+        "при необходимости скопируйте его вручную.";
+    } else {
+      recentOrderStatus.textContent =
+        "Заказ № " + order.order_id +
+        " создан и скопирован. Ссылка передаёт боту номер заказа. " +
+        "После перехода нажмите «Старт».";
     }
 
-    recentOrderStatus.textContent =
-      "Заказ № " + order.order_id +
-      " создан и скопирован. В Telegram вставьте " +
-      "сообщение и нажмите «Отправить».";
-
+    // Переход не зависит от доступа браузера к буферу обмена.
+    // При возвращении на сайт подтверждение и ссылка останутся в браузере.
     if (openTelegram) {
-      window.location.assign(TELEGRAM_URL);
+      window.location.assign(telegramOrderUrl(order.order_id));
     }
   } catch (error) {
     orderStatus.textContent =
@@ -1045,8 +1067,8 @@ recentOrderCopy.addEventListener("click", async () => {
   if (recentOrderSection.hidden) return;
   const copied = await copyRegisteredOrder(recentOrderPreview);
   recentOrderStatus.textContent = copied
-    ? "Заказ скопирован. Вставьте его в Telegram и отправьте магазину."
-    : "Скопируйте выделенный текст вручную и отправьте магазину.";
+    ? "Текст скопирован. При необходимости отправьте его Telegram-боту."
+    : "Скопируйте выделенный текст вручную для Telegram-бота.";
 });
 
 /* Повторение только собирает НОВУЮ корзину, без создания заказа. */
