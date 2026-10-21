@@ -111,11 +111,13 @@ body .hero-button { display:inline-flex; justify-content:center; align-items:cen
   position:relative; min-height:440px; color:white!important; text-align:left!important;
   padding:85px max(4%,calc((100vw - 1340px)/2)) 72px!important;
   overflow:hidden;
-  background-image: linear-gradient(90deg,rgba(0,19,40,.92) 0%,rgba(0,25,48,.68) 34%,rgba(0,30,57,.13) 80%),
-    url("https://upload.wikimedia.org/wikipedia/commons/6/61/Humpback_Whale_underwater_shot.jpg"),
-    url("/media/hero-whale.svg")!important;
-  background-size:cover,cover,cover!important;
-  background-position:center,center 48%,center!important;
+  background-image:
+    linear-gradient(90deg,rgba(0,19,40,.94) 0%,rgba(0,25,48,.68) 31%,rgba(0,30,57,.06) 78%),
+    url("/media/whale-from-mockup.svg")!important;
+  background-color:#042846!important;
+  background-repeat:no-repeat!important;
+  background-size:cover,cover!important;
+  background-position:center,center 46%!important;
 }
 .home-page .hero::after {
   content:""; position:absolute; inset:auto 0 0; height:4px;
@@ -287,6 +289,82 @@ body:not(.home-page) .category-promo { color:var(--muted); }
 .site-footer .footer-developers { margin-left:auto; color:#7c9eaf; font-size:11px; }
 .site-footer .footer-developers:hover { color:white; }
 .site-footer .footer-contacts { display:block; color:#b8d1e2; font-size:12px; margin-top:11px; }
+
+/* Коррекция подвала: логотипы без светлой плашки, ссылки по центру */
+.site-footer .footer-brand {
+  background:transparent!important;
+  padding:0!important;
+  border-radius:0!important;
+  justify-self:start;
+  min-width:0;
+}
+.site-footer .footer-brand img {
+  mix-blend-mode:screen;
+  filter:grayscale(1) invert(1) brightness(1.55);
+  height:35px;
+  max-width:130px;
+  object-fit:contain;
+}
+.site-footer .footer-brand .oceanhd-logo {
+  height:36px;
+  max-width:128px;
+}
+.site-footer .footer-brand .brand-separator {
+  background:rgba(220,234,247,.38);
+}
+.site-footer .footer-content {
+  display:grid!important;
+  grid-template-columns:minmax(235px,1fr) minmax(330px,1.7fr) minmax(225px,1fr);
+  column-gap:22px; row-gap:10px;
+  justify-content:space-between;
+  align-items:center;
+}
+.site-footer .footer-center {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:22px;
+  text-align:center;
+  min-width:0;
+}
+.site-footer .footer-links,
+.site-footer .footer-socials { justify-content:center; align-items:center; }
+.site-footer .footer-links { gap:20px; }
+.site-footer .footer-socials { gap:9px; }
+.site-footer .footer-note {
+  text-align:right;
+  justify-self:end;
+}
+.site-footer .footer-developers {
+  grid-column:1/-1;
+  justify-self:end;
+  margin:0;
+  padding-top:3px;
+  font-size:11px;
+}
+@media (max-width:1100px) {
+  .site-footer .footer-content {
+    grid-template-columns:1fr 1fr;
+  }
+  .site-footer .footer-brand { grid-column:1; }
+  .site-footer .footer-center { grid-column:2; justify-content:center; }
+  .site-footer .footer-note { grid-column:1/-1; justify-self:center; text-align:center; }
+  .site-footer .footer-developers { grid-column:1/-1; }
+}
+@media (max-width:650px) {
+  .site-footer .footer-content { grid-template-columns:1fr!important; row-gap:20px; }
+  .site-footer .footer-brand,
+  .site-footer .footer-center,
+  .site-footer .footer-note,
+  .site-footer .footer-developers {
+    grid-column:1!important;
+    justify-self:center!important;
+  }
+  .site-footer .footer-center { flex-direction:column; gap:18px; }
+  .site-footer .footer-note { text-align:center!important; }
+}
+
 @media (max-width:1100px) {
  .site-header .site-nav { grid-template-columns:1fr auto; row-gap:10px; padding:11px 0; }
  .site-header .nav-links { grid-row:2; grid-column:1/-1; justify-content:center; }
@@ -306,7 +384,7 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-header .site-search input { font-size:11px; }
  .site-header .global-cart-link .cart-word { display:none; }
  .site-header .global-cart-link { margin-left:6px!important; }
- .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center,center!important; }
+ .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center!important; }
  .home-page .hero h1 { font-size:46px; }
  .home-page .hero p { max-width:335px; }
  .home-page .hero-sign { display:none; }
