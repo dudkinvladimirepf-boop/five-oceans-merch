@@ -298,7 +298,7 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-header .site-nav { display:flex; flex-wrap:wrap; gap:12px; min-height:0; padding:12px 0; }
  .site-header .brandmarks { gap:9px; flex:1 1 100%; }
  .site-header .brandmarks img { height:31px; max-width:120px; }
- .site-header .brandmarks .oceanhd-logo { max-width:110px; }
+ .site-header .brandmarks .oceanhd-logo { width:120px; height:auto; max-width:none; }
  .site-header .brand-separator { height:29px; }
  .site-header .nav-links { order:2; margin-right:auto; gap:18px; }
  .site-header .site-actions.menu { order:3; gap:6px; }
