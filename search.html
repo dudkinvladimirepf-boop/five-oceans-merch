@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Поиск товаров — Клуб «5 океанов»</title>
+<style>
+body{margin:0}main{max-width:1320px;margin:45px auto 80px;padding:0 22px;min-height:50vh}
+h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
+.search-description{color:#617383;margin:0 0 28px}
+</style>
+<link rel="stylesheet" href="/site-theme.css">
+</head>
+<body>
+<header></header>
+<main>
+  <h1 id="heading">Товары магазина</h1>
+  <p class="search-description" id="search-description"></p>
+  <div id="results" class="search-results" aria-live="polite">
+    Загружаем каталог...
+  </div>
+</main>
+<footer></footer>
+<script>
+(async function () {
+  const params = new URLSearchParams(location.search);
+  const searchTerm = (params.get("q") || "").trim().slice(0,100);
+  const collection = params.get("collection") || "";
+  const heading = document.getElementById("heading");
+  const description = document.getElementById("search-description");
+  const results = document.getElementById("results");
+  const normalize = x => String(x || "").toLocaleLowerCase("ru-RU");
+  const money = value =>
+    Number.isFinite(Number(value)) ?
+      new Intl.NumberFormat("ru-RU", {
+        style:"currency",currency:"RUB",maximumFractionDigits:0
+      }).format(Number(value)) : "Цена уточняется";
+
+  if (searchTerm) {
+    heading.textContent = "Поиск товаров";
+    description.textContent = "Результаты по запросу: «" + searchTerm + "»";
+    document.title = "Поиск: " + searchTerm + " — 5 океанов";
+  } else if (collection === "new") {
+    heading.textContent = "Новинки";
+    description.textContent = "Новые поступления магазина";
+    document.title = "Новинки — 5 океанов";
+  } else if (collection === "featured") {
+    heading.textContent = "Наш выбор";
+    description.textContent = "Товары, которые мы особенно рекомендуем";
+    document.title = "Наш выбор — 5 океанов";
+  } else {
+    heading.textContent = "Все товары";
+    description.textContent = "Мерч Клуба «5 океанов» и телеканала ОКЕАН HD";
+  }
+
+  try {
+    const [productsResponse,categoriesResponse] = await Promise.all([
+      fetch("/data/products.json", {cache:"no-store"}),
+      fetch("/data/categories.json", {cache:"no-store"})
+    ]);
+    if (!productsResponse.ok || !categoriesResponse.ok) {
+      throw new Error("Ошибка загрузки каталога");
+    }
+    const [products,categories] = await Promise.all([
+      productsResponse.json(),categoriesResponse.json()
+    ]);
+    if (!Array.isArray(products) || !Array.isArray(categories)) {
+      throw new Error("Некорректный формат каталога");
+    }
+    const categoryNames = new Map(categories.map(c=>[normalize(c.id),c.title]));
+    const visible = products.filter(p=>{
+      if (!p || !p.slug) return false;
+      if (collection === "new" && (p.new_arrival !== true || p.available !== true)) return false;
+      if (collection === "featured" && (p.featured !== true || p.available !== true)) return false;
+      if (!searchTerm) return true;
+      const combined = [
+        p.title,p.description,p.slug,
+        categoryNames.get(normalize(p.category))
+      ].map(normalize).join(" ");
+      return combined.includes(normalize(searchTerm));
+    });
+
+    results.replaceChildren();
+    if (!visible.length) {
+      results.textContent = "По этому запросу товары не найдены.";
+      return;
+    }
+    description.append(" · " + visible.length + " шт.");
+    for (const product of visible) {
+      const card = document.createElement("a");
+      card.className = "card";
+      card.href = "/product.html?slug=" + encodeURIComponent(product.slug);
+      const photo = Array.isArray(product.photos) ?
+        product.photos.find(Boolean) : null;
+      if (photo) {
+        const img = document.createElement("img");
+        img.src = photo;
+        img.alt = product.title || "Товар";
+        img.loading = "lazy";
+        card.append(img);
+      } else {
+        const placeholder = document.createElement("div");
+        placeholder.className = "search-fallback";
+        placeholder.textContent = "5 ОКЕАНОВ";
+        card.append(placeholder);
+      }
+      const info = document.createElement("div");
+      info.className = "info";
+      const title = document.createElement("h3");
+      title.textContent = product.title || product.slug;
+      const price = document.createElement("p");
+      price.className = "price";
+      price.textContent = money(product.price);
+      const more = document.createElement("div");
+      more.className = "open-product";
+      more.textContent = product.available === false ?
+        "Подробнее · Нет в наличии →" : "Подробнее о товаре →";
+      info.append(title,price,more);
+      card.append(info);
+      results.append(card);
+    }
+  } catch (error) {
+    console.error(error);
+    results.textContent = "Не удалось загрузить товары. Обновите страницу.";
+  }
+})();
+</script>
+<script src="/site-shell.js"></script>
+<script src="/cart-nav.js" defer></script>
+</body>
+</html>

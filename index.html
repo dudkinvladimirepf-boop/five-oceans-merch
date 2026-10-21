@@ -304,9 +304,10 @@ footer {
   }
 }
 </style>
+<link rel="stylesheet" href="/site-theme.css">
 </head>
 
-<body>
+<body class="home-page">
 
 <!-- ВЕРХНЕЕ МЕНЮ -->
 
@@ -323,19 +324,21 @@ footer {
 </header>
 
 <!-- ГЛАВНЫЙ БАННЕР -->
-
 <section class="hero">
-  <h1>Мерч для тех, кто любит океан</h1>
-
-  <p>
-    Одежда и аксессуары, вдохновлённые
-    морскими путешествиями и экспедициями
-    Клуба «5 океанов».
-  </p>
-
-  <a class="hero-button" href="#catalog">
-    Смотреть коллекцию
-  </a>
+  <div class="hero-inner">
+    <span class="hero-kicker">Клуб «5 океанов» × ОКЕАН HD</span>
+    <h1>Ближе<br>к океану</h1>
+    <p>
+      Официальный мерч Клуба «5 океанов» и телеканала
+      ОКЕАН HD для тех, кого вдохновляет океан.
+    </p>
+    <a class="hero-button" href="#catalog">
+      Смотреть каталог <span aria-hidden="true">→</span>
+    </a>
+  </div>
+  <div class="hero-sign" aria-hidden="true">
+    ЛЮДИ<br>МЕСТА<br>ИСТОРИИ
+  </div>
 </section>
 
 <main>
@@ -343,10 +346,10 @@ footer {
   <!-- ОСНОВНЫЕ КАТЕГОРИИ -->
 
   <section id="catalog">
-    <h2 class="section-title">Наши коллекции</h2>
-    <p class="section-description">
-      Выберите категорию товаров
-    </p>
+    <div class="section-head">
+      <h2 class="section-title">Коллекции</h2>
+      <a class="section-side-link" href="#categories">Смотреть все коллекции →</a>
+    </div>
 
     <div id="categories" class="categories">
       Загружаем категории...
@@ -579,13 +582,15 @@ function createShowcase(id, title, description, items, categories) {
   const section = makeElement("section", "showcase");
   section.id = id;
 
-  section.appendChild(
-    makeElement("h2", "section-title", title)
-  );
-
-  section.appendChild(
-    makeElement("p", "section-description", description)
-  );
+  const head = makeElement("div", "section-head");
+  head.appendChild(makeElement("h2", "section-title", title));
+  const all = makeElement("a", "section-side-link",
+    id === "new-arrivals" ? "Все новинки →" : "Весь наш выбор →");
+  all.href = "/search.html?collection=" +
+    (id === "new-arrivals" ? "new" : "featured");
+  head.appendChild(all);
+  section.appendChild(head);
+  section.appendChild(makeElement("p", "section-description", description));
 
   const grid = makeElement("div", "categories");
 
@@ -715,6 +720,7 @@ loadHomepage();
 
 <!-- ЕДИНАЯ КОРЗИНА -->
 
+<script src="/site-shell.js"></script>
 <script src="/cart-nav.js" defer></script>
 
 </body>

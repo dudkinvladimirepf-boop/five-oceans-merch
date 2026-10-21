@@ -1,174 +1,74 @@
-
-/*
-  Клуб «5 океанов»
-  Единая корзина и счётчик товаров
-*/
-
-(function () {
+/* Единая корзина для всех публичных страниц магазина */
+(() => {
   "use strict";
-
   const CART_KEY = "five-oceans-cart-v1";
 
-  // Подсчёт количества товаров
   function getCartCount() {
     try {
-      const saved = localStorage.getItem(CART_KEY);
-      const cart = JSON.parse(saved || "[]");
-
-      if (!Array.isArray(cart)) return 0;
-
-      return cart.reduce((total, item) => {
-        const quantity = Number(item.quantity);
-
-        if (!Number.isFinite(quantity) || quantity < 1) {
-          return total;
-        }
-
-        return total + Math.min(99, Math.floor(quantity));
+      const saved = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+      if (!Array.isArray(saved)) return 0;
+      return saved.reduce((sum, item) => {
+        const qty = Number(item.quantity);
+        return sum + (Number.isFinite(qty) && qty > 0
+          ? Math.min(99, Math.floor(qty)) : 0);
       }, 0);
-
     } catch (error) {
       console.error("Ошибка чтения корзины:", error);
       return 0;
     }
   }
 
-  // Создаём ссылку на корзину
   function initCartNavigation() {
-
     const nav = document.querySelector("header nav");
+    if (!nav || nav.querySelector(".global-cart-link")) return;
 
-    if (!nav) return;
-
-    // Предотвращаем дублирование кнопки
-    if (nav.querySelector(".global-cart-link")) return;
-
-    // Выбираем место в меню
-    const menu =
+    const menu = nav.querySelector(".site-actions") ||
       nav.querySelector(".menu") ||
-      nav.querySelector(".nav-links") ||
-      nav;
+      nav.querySelector(".nav-links") || nav;
 
-    const cartLink = document.createElement("a");
-
-    cartLink.href = "/cart.html";
-    cartLink.className = "global-cart-link";
-
-    const cartLabel = document.createElement("span");
-
-    cartLink.appendChild(cartLabel);
-    menu.appendChild(cartLink);
-
-    // Оформление в едином стиле с меню
-    const style = document.createElement("style");
-
-    style.textContent = `
-      header nav .menu,
-      header nav .nav-links {
-        align-items: center;
-      }
-
-      header nav .global-cart-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-
-        margin-left: 14px;
-        padding: 0;
-
-        border: none;
-        border-radius: 0;
-        background: transparent;
-
-        color: inherit;
-        font-family: inherit;
-        font-size: inherit;
-        font-weight: 400;
-        line-height: inherit;
-
-        text-decoration: none;
-        white-space: nowrap;
-        cursor: pointer;
-      }
-
-      header nav .global-cart-link:hover {
-        color: #c2d9e6;
-        background: transparent;
-      }
-
-      header nav .global-cart-link:focus-visible {
-        outline: 2px solid white;
-        outline-offset: 5px;
-      }
-
-      @media (max-width: 600px) {
-        header nav .global-cart-link {
-          margin-left: 6px;
-        }
-      }
+    const link = document.createElement("a");
+    link.href = "/cart.html";
+    link.className = "global-cart-link";
+    link.innerHTML = `
+      <span class="cart-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.7"
+             stroke-linejoin="round" stroke-linecap="round">
+          <path d="M2 3h2l2.6 12.2h12.2L22 7H5"/>
+          <circle cx="9" cy="20.2" r="1.2"/>
+          <circle cx="18" cy="20.2" r="1.2"/>
+        </svg>
+      </span>
+      <span class="cart-word">Корзина</span>
+      <span class="cart-badge" data-empty="true" aria-hidden="true">0</span>
     `;
 
-    document.head.appendChild(style);
-
-    // Обновление счётчика
-    function updateCartBadge() {
+    const badge = link.querySelector(".cart-badge");
+    const updateCartBadge = () => {
       const count = getCartCount();
+      badge.textContent = String(count > 99 ? "99+" : count);
+      badge.dataset.empty = count ? "false" : "true";
+      link.setAttribute("aria-label", "Открыть корзину. Товаров: " + count);
+    };
 
-      cartLabel.textContent = "Корзина (" + count + ")";
-
-      cartLink.setAttribute(
-        "aria-label",
-        "Открыть корзину. Товаров: " + count
-      );
-    }
-
-    // Доступ для остальных скриптов
+    menu.appendChild(link);
     window.updateCartBadge = updateCartBadge;
 
-    // Изменение корзины на текущей странице
-    window.addEventListener(
-      "five-oceans-cart-updated",
-      updateCartBadge
-    );
-
-    // Изменение корзины в другой вкладке
-    window.addEventListener("storage", (event) => {
-      if (
-        event.key === CART_KEY ||
-        event.key === null
-      ) {
-        updateCartBadge();
-      }
+    window.addEventListener("five-oceans-cart-updated", updateCartBadge);
+    window.addEventListener("storage", event => {
+      if (event.key === CART_KEY || event.key === null) updateCartBadge();
     });
-
-    // Возвращение на страницу
-    window.addEventListener(
-      "pageshow",
-      updateCartBadge
-    );
-
-    // Возвращение во вкладку
-    document.addEventListener(
-      "visibilitychange",
-      () => {
-        if (!document.hidden) {
-          updateCartBadge();
-        }
-      }
-    );
+    window.addEventListener("pageshow", updateCartBadge);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) updateCartBadge();
+    });
 
     updateCartBadge();
   }
 
-  // Запуск после загрузки страницы
   if (document.readyState === "loading") {
-    document.addEventListener(
-      "DOMContentLoaded",
-      initCartNavigation
-    );
+    document.addEventListener("DOMContentLoaded", initCartNavigation);
   } else {
     initCartNavigation();
   }
-
 })();
-
