@@ -111,11 +111,13 @@ body .hero-button { display:inline-flex; justify-content:center; align-items:cen
   position:relative; min-height:440px; color:white!important; text-align:left!important;
   padding:85px max(4%,calc((100vw - 1340px)/2)) 72px!important;
   overflow:hidden;
-  background-image: linear-gradient(90deg,rgba(0,19,40,.92) 0%,rgba(0,25,48,.68) 34%,rgba(0,30,57,.13) 80%),
-    url("https://upload.wikimedia.org/wikipedia/commons/6/61/Humpback_Whale_underwater_shot.jpg"),
-    url("/media/hero-whale.svg")!important;
-  background-size:cover,cover,cover!important;
-  background-position:center,center 48%,center!important;
+  background-image:
+    linear-gradient(90deg,rgba(0,19,40,.94) 0%,rgba(0,25,48,.68) 31%,rgba(0,30,57,.06) 78%),
+    url("/media/whale-from-mockup.svg")!important;
+  background-color:#042846!important;
+  background-repeat:no-repeat!important;
+  background-size:cover,cover!important;
+  background-position:center,center 46%!important;
 }
 .home-page .hero::after {
   content:""; position:absolute; inset:auto 0 0; height:4px;
@@ -382,7 +384,7 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-header .site-search input { font-size:11px; }
  .site-header .global-cart-link .cart-word { display:none; }
  .site-header .global-cart-link { margin-left:6px!important; }
- .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center,center!important; }
+ .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center!important; }
  .home-page .hero h1 { font-size:46px; }
  .home-page .hero p { max-width:335px; }
  .home-page .hero-sign { display:none; }
