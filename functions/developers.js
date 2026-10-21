@@ -300,6 +300,7 @@ async function recentOrders(env, filters = {}) {
   const status = String(filters.order_status || "");
   const shipping = String(filters.order_shipping || "");
   const product = String(filters.order_product || "");
+  const source = String(filters.order_source || "");
   const result = await database(env).prepare(
     `SELECT
        o.order_id,
@@ -319,6 +320,7 @@ async function recentOrders(env, filters = {}) {
        WHERE (? = '' OR instr(lower(order_id), lower(?)) > 0)
          AND (? = '' OR status = ?)
          AND (? = '' OR shipping_status = ?)
+         AND (? = '' OR source = ?)
          AND (? = '' OR EXISTS (
            SELECT 1 FROM order_items AS matched
            WHERE matched.order_id = orders.order_id
@@ -331,7 +333,7 @@ async function recentOrders(env, filters = {}) {
        ON i.order_id = o.order_id
      ORDER BY o.created_at DESC, o.order_id DESC,
               i.product_slug, i.size`
-  ).bind(number, number, status, status, shipping, shipping, product, product).all();
+  ).bind(number, number, status, status, shipping, shipping, source, source, product, product).all();
 
   const orders = [];
   const byId = new Map();
@@ -711,6 +713,7 @@ function readDashboardFilters(request) {
     order_number: value("order_number", 80),
     order_status: value("order_status", 30),
     order_shipping: value("order_shipping", 30),
+    order_source: value("order_source", 30),
     order_product: value("order_product", 300)
   };
 }
@@ -830,6 +833,16 @@ function renderOrderFilters(options, filters) {
           </select>
         </div>
         <div class="filter-field">
+          <label for="order-source">Источник заказа</label>
+          <select id="order-source" name="order_source">
+            ${optionHtml(options.sources.map(source => ({
+              value: source,
+              label: source === "site" ? "Сайт" :
+                source === "telegram" ? "Telegram" : source
+            })), filters.order_source, "Любой источник")}
+          </select>
+        </div>
+        <div class="filter-field">
           <label for="order-shipping">Статус отправки</label>
           <select id="order-shipping" name="order_shipping">
             ${optionHtml(options.shipping.map(status => ({
@@ -858,16 +871,18 @@ function renderOrderFilters(options, filters) {
 
 async function orderFilterOptions(env) {
   const db = database(env);
-  const [statuses, shipping, products] = await Promise.all([
+  const [statuses, shipping, products, sources] = await Promise.all([
     db.prepare("SELECT DISTINCT status FROM orders ORDER BY status").all(),
     db.prepare("SELECT DISTINCT shipping_status FROM orders ORDER BY shipping_status").all(),
     db.prepare(
       "SELECT DISTINCT product_title FROM order_items ORDER BY product_title"
-    ).all()
+    ).all(),
+    db.prepare("SELECT DISTINCT source FROM orders ORDER BY source").all()
   ]);
   return {
     statuses: (statuses.results || []).map(x => String(x.status)),
     shipping: (shipping.results || []).map(x => String(x.shipping_status)),
+    sources: (sources.results || []).map(x => String(x.source)),
     products: (products.results || []).map(x => String(x.product_title))
   };
 }
@@ -1087,6 +1102,118 @@ async function saveStock(context, form) {
   return "Остаток сохранён: " + slug +
     " / " + (size || "Без размера") +
     " — " + quantity + " шт.";
+}
+
+async function saveStockBulk(context, form) {
+  const entries = form.getAll("stock_item");
+  const inputs = form.getAll("stock_quantity");
+
+  if (
+    !entries.length ||
+    entries.length !== inputs.length ||
+    entries.length > 1000
+  ) {
+    throw new Error("Некорректный список остатков. Обновите страницу.");
+  }
+
+  const updated = [];
+  const unique = new Set();
+
+  for (let i = 0; i < entries.length; i++) {
+    let record;
+
+    try {
+      record = JSON.parse(String(entries[i]));
+    } catch {
+      throw new Error("Ошибка чтения складских позиций.");
+    }
+
+    if (!Array.isArray(record) || record.length !== 3) {
+      throw new Error("Некорректная складская позиция.");
+    }
+
+    const [slug, size, previous] = record;
+
+    if (
+      typeof slug !== "string" ||
+      !slug ||
+      slug.length > 300 ||
+      typeof size !== "string" ||
+      size.length > 100
+    ) {
+      throw new Error("Некорректный товар или размер.");
+    }
+
+    const key = JSON.stringify([slug, size]);
+
+    if (unique.has(key)) {
+      throw new Error("Складская позиция повторяется в форме.");
+    }
+
+    unique.add(key);
+
+    const expected = parseQuantity(previous);
+    const quantity = parseQuantity(inputs[i]);
+
+    if (expected !== quantity) {
+      updated.push([slug, size, expected, quantity]);
+    }
+  }
+
+  if (!updated.length) {
+    return "Изменений остатков нет.";
+  }
+
+  const db = database(context.env);
+
+  /*
+    One SQLite UPDATE statement updates ALL edited rows or NONE.
+    The WHERE guard verifies, inside the same atomic statement:
+    - every edited slug/size still exists;
+    - each previous total still matches (no lost updates);
+    - no new total falls below reserved_quantity.
+    No stock is changed on validation failure.
+  */
+  const result = await db.prepare(
+    `WITH edits AS (
+       SELECT
+         json_extract(value, '$[0]') AS slug,
+         json_extract(value, '$[1]') AS size,
+         json_extract(value, '$[2]') AS previous,
+         json_extract(value, '$[3]') AS quantity
+       FROM json_each(?)
+     )
+     UPDATE inventory
+     SET total_quantity = (
+       SELECT e.quantity FROM edits AS e
+       WHERE e.slug = inventory.product_slug
+         AND e.size = inventory.size
+     ),
+     updated_at = CURRENT_TIMESTAMP
+     WHERE EXISTS (
+       SELECT 1 FROM edits AS e
+       WHERE e.slug = inventory.product_slug
+         AND e.size = inventory.size
+     )
+     AND (
+       SELECT COUNT(*)
+       FROM edits AS e
+       JOIN inventory AS i
+         ON i.product_slug = e.slug
+        AND i.size = e.size
+       WHERE i.total_quantity = e.previous
+         AND i.reserved_quantity <= e.quantity
+     ) = (SELECT COUNT(*) FROM edits)`
+  ).bind(JSON.stringify(updated)).run();
+
+  if (Number(result.meta?.changes) !== updated.length) {
+    throw new Error(
+      "Остатки не сохранены: одна из позиций изменилась или " +
+      "новое количество меньше резерва. Обновите страницу и повторите."
+    );
+  }
+
+  return "Сохранено складских позиций: " + updated.length + ".";
 }
 
 /* ДВУХЭТАПНОЕ УДАЛЕНИЕ */
@@ -1356,7 +1483,6 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
   }
 
   const names = productNames(products);
-
   const body = rows.map(item => {
     const slug = String(item.product_slug);
     const size = String(item.size || "");
@@ -1371,43 +1497,25 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
         </td>
 
         <td>${esc(size || "Без размера")}</td>
-
         <td class="num">${number(item.reserved_quantity)}</td>
-
-        <td class="num green">
-          ${number(item.available_quantity)}
-        </td>
-
+        <td class="num green">${number(item.available_quantity)}</td>
         <td>
-          <form method="POST" action="${esc(formAction)}"
-                class="inline-form">
-            ${hidden("action", "stock-save")}
-            ${hidden("csrf", csrf)}
-            ${hidden("product_slug", slug)}
-            ${hidden("size", size)}
-            ${hidden("expected_total", total)}
-
-            <input type="number"
-              name="quantity"
-              min="0"
-              max="${MAX_STOCK}"
-              step="1"
-              value="${total}"
-              required>
-
-            <button class="blue-button" type="submit">
-              Сохранить
-            </button>
-          </form>
+          <input type="hidden" form="stock-bulk-form"
+                 name="stock_item"
+                 value="${esc(JSON.stringify([slug, size, total]))}">
+          <input type="number" form="stock-bulk-form"
+                 class="stock-bulk-quantity"
+                 name="stock_quantity"
+                 min="0" max="${MAX_STOCK}" step="1"
+                 value="${total}" required
+                 aria-label="На складе: ${esc(title)}, ${esc(size || "Без размера")}">
         </td>
-
         <td>
           <form method="POST" action="${esc(formAction)}">
             ${hidden("action", "stock-delete-request")}
             ${hidden("csrf", csrf)}
             ${hidden("product_slug", slug)}
             ${hidden("size", size)}
-
             <button class="outline-danger" type="submit">
               Удалить
             </button>
@@ -1418,6 +1526,11 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
   }).join("");
 
   return `
+    <form id="stock-bulk-form" method="POST"
+          action="${esc(formAction)}#stock">
+      ${hidden("action", "stock-bulk-save")}
+      ${hidden("csrf", csrf)}
+    </form>
     <div class="table-wrap">
       <table>
         <thead>
@@ -1432,6 +1545,15 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
         </thead>
         <tbody>${body}</tbody>
       </table>
+    </div>
+    <div class="stock-bulk-actions">
+      <button type="submit" form="stock-bulk-form"
+              class="blue-button">Сохранить изменения</button>
+      <p class="muted">
+        Измените количество у нескольких товаров и сохраните одним нажатием.
+        Сохраняются только изменённые строки.
+        Если выбран фильтр, сохраняются только видимые позиции.
+      </p>
     </div>
   `;
 }
@@ -1516,7 +1638,7 @@ async function dashboard(context, secret, options = {}) {
   let excluded = [];
   let products = [];
   let orders = [];
-  let orderChoices = { statuses: [], shipping: [], products: [] };
+  let orderChoices = { statuses: [], shipping: [], sources: [], products: [] };
   const filters = readDashboardFilters(context.request);
   const query = filteredQuery(filters);
   const formAction = "/developers" + (query ? "?" + query : "");
@@ -1846,6 +1968,23 @@ td small {
   border: 1px solid #cbd5df;
   border-radius: 8px;
 }
+.stock-bulk-quantity {
+  width: 95px;
+  padding: 10px 8px;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+}
+.stock-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+}
+.stock-bulk-actions .muted {
+  margin: 0;
+  flex: 1 1 240px;
+}
 .outline-danger {
   padding: 10px 14px;
   border: 1px solid #efb8b8;
@@ -2037,7 +2176,7 @@ export async function onRequestPost(context) {
     request.headers.get("Content-Length") || "0"
   );
 
-  if (contentLength > 4096) {
+  if (!Number.isFinite(contentLength) || contentLength > 200000) {
     return new Response("Request too large", {
       status: 413
     });
@@ -2135,6 +2274,10 @@ export async function onRequestPost(context) {
 
       case "sync":
         report = await syncCatalog(context);
+        break;
+
+      case "stock-bulk-save":
+        message = await saveStockBulk(context, form);
         break;
 
       case "stock-save":
