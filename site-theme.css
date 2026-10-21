@@ -113,11 +113,12 @@ body .hero-button { display:inline-flex; justify-content:center; align-items:cen
   overflow:hidden;
   background-image:
     linear-gradient(90deg,rgba(0,19,40,.94) 0%,rgba(0,25,48,.68) 31%,rgba(0,30,57,.06) 78%),
+    url("/media/whale-hero-hd.svg"),
     url("/media/whale-from-mockup.svg")!important;
   background-color:#042846!important;
   background-repeat:no-repeat!important;
-  background-size:cover,cover!important;
-  background-position:center,center 46%!important;
+  background-size:cover,cover,cover!important;
+  background-position:center,center 46%,center 46%!important;
 }
 .home-page .hero::after {
   content:""; position:absolute; inset:auto 0 0; height:4px;
@@ -384,7 +385,7 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-header .site-search input { font-size:11px; }
  .site-header .global-cart-link .cart-word { display:none; }
  .site-header .global-cart-link { margin-left:6px!important; }
- .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center!important; }
+ .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center,58% center!important; }
  .home-page .hero h1 { font-size:46px; }
  .home-page .hero p { max-width:335px; }
  .home-page .hero-sign { display:none; }
@@ -406,7 +407,7 @@ body:not(.home-page) .category-promo { color:var(--muted); }
 /* Коррекция по дизайну: реальные цвета логотипов, прозрачная подложка */
 .site-footer .footer-brand img,
 .site-footer .footer-brand .oceanhd-logo {
-  filter:none!important;
+  filter:drop-shadow(0 0 2px rgba(255,255,255,.22))!important;
   mix-blend-mode:normal!important;
 }
 .site-footer .footer-meta {
