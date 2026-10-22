@@ -477,9 +477,9 @@ function cartVariantInfo(product,rawSize) {
   const actual=parsed[2];
   const valid=variant.available===true &&
     (allowed.length?allowed.includes(actual):actual==="");
+  // Снимки конкретного цвета не подменяются общими фото товара.
   return {valid,label:String(variant.label||variant.code),size:actual,
-    photos:Array.isArray(variant.photos)&&variant.photos.some(Boolean)
-      ?variant.photos:product.photos};
+    photos:Array.isArray(variant.photos)?variant.photos:[]};
 }
 
 /*
