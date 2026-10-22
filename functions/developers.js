@@ -293,7 +293,11 @@ async function inventoryRows(env) {
             total_quantity, reserved_quantity,
             total_quantity - reserved_quantity
               AS available_quantity
-     FROM inventory
+     FROM inventory AS i
+     WHERE NOT EXISTS (
+       SELECT 1 FROM inventory_exclusions AS e
+       WHERE e.product_slug = i.product_slug AND e.size = i.size
+     )
      ORDER BY product_slug, size`
   ).all();
 
@@ -302,13 +306,87 @@ async function inventoryRows(env) {
 
 async function excludedRows(env) {
   const result = await database(env).prepare(
-    `SELECT product_slug, product_id, size, deleted_at
-     FROM inventory_exclusions
-     ORDER BY deleted_at DESC
-     LIMIT 500`
+    `SELECT e.product_slug, e.product_id, e.size, e.deleted_at,
+            i.total_quantity, i.reserved_quantity
+     FROM inventory_exclusions AS e
+     LEFT JOIN inventory AS i
+       ON i.product_slug = e.product_slug AND i.size = e.size
+     ORDER BY e.deleted_at DESC, e.product_slug, e.size
+     LIMIT 1000`
   ).all();
-
   return result.results || [];
+}
+
+/*
+  Резерв — денормализованный счётчик в inventory.
+  При ручном удалении заказов он может отличаться от суммы
+  позиций действующих заказов со статусом reserved.
+  Диагностика ничего не изменяет; исправление — отдельная кнопка.
+*/
+const EXPECTED_RESERVE_SQL = `COALESCE((
+  SELECT SUM(oi.quantity)
+  FROM order_items AS oi
+  JOIN orders AS o ON o.order_id = oi.order_id
+  WHERE o.status = 'reserved'
+    AND oi.product_slug = inventory.product_slug
+    AND oi.size = inventory.size
+), 0)`;
+
+async function reserveDiagnostics(env) {
+  const db = database(env);
+  const row = await db.prepare(
+    `SELECT COUNT(*) AS mismatches FROM inventory
+     WHERE reserved_quantity <> ${EXPECTED_RESERVE_SQL}`
+  ).first();
+  const orphan = await db.prepare(
+    `SELECT COUNT(*) AS missing FROM order_items AS oi
+     JOIN orders AS o ON o.order_id = oi.order_id
+     LEFT JOIN inventory AS i
+       ON i.product_slug = oi.product_slug AND i.size = oi.size
+     WHERE o.status = 'reserved' AND i.product_slug IS NULL`
+  ).first();
+  return { mismatches: Number(row?.mismatches || 0),
+           missing: Number(orphan?.missing || 0) };
+}
+
+async function repairReservations(env) {
+  const db = database(env);
+  const diagnostics = await reserveDiagnostics(env);
+  if (diagnostics.missing) {
+    throw new Error("Есть резервные заказы без складской позиции. " +
+      "Исправление остановлено для сохранения данных заказов.");
+  }
+  const impossible = await db.prepare(
+    `SELECT COUNT(*) AS count FROM inventory
+     WHERE ${EXPECTED_RESERVE_SQL} > total_quantity`
+  ).first();
+  if (Number(impossible?.count || 0)) {
+    throw new Error("Резерв действующих заказов превышает общий остаток. " +
+      "Автоматическое исправление остановлено.");
+  }
+  const result = await db.prepare(
+    `UPDATE inventory
+     SET reserved_quantity = ${EXPECTED_RESERVE_SQL},
+         updated_at = CURRENT_TIMESTAMP
+     WHERE reserved_quantity <> ${EXPECTED_RESERVE_SQL}
+       AND NOT EXISTS (
+         SELECT 1 FROM (
+           SELECT i.total_quantity, i.product_slug, i.size,
+                  COALESCE(SUM(CASE WHEN o.status = 'reserved'
+                     THEN oi.quantity ELSE 0 END), 0) AS needed
+           FROM inventory AS i
+           LEFT JOIN order_items AS oi ON oi.product_slug = i.product_slug
+              AND oi.size = i.size
+           LEFT JOIN orders AS o ON o.order_id = oi.order_id
+           GROUP BY i.product_slug, i.size
+         ) AS state WHERE state.needed > state.total_quantity
+       )`
+  ).run();
+  if (Number(result.meta?.changes || 0) !== diagnostics.mismatches) {
+    throw new Error("Резерв изменился во время исправления. Обнови CRM и проверь данные.");
+  }
+  return "Резервы сверены с действующими заказами. Исправлено позиций: " +
+    diagnostics.mismatches + ".";
 }
 
 async function recentOrders(env, filters = {}) {
@@ -800,6 +878,7 @@ function renderStockFilters(rows, products, filters) {
 
   return `
     <form method="GET" action="/developers#stock" class="filters-form">
+      <input type="hidden" name="tab" value="stock">
       ${retainFilters(filters, "stock_")}
       <div class="filters-grid">
         <div class="filter-field">
@@ -825,7 +904,7 @@ function renderStockFilters(rows, products, filters) {
         </div>
         <div class="filter-controls">
           <button type="submit" class="blue-button">Найти</button>
-          <a href="/developers#stock" class="filter-reset">Сбросить все</a>
+          <a href="/developers?tab=stock#stock" class="filter-reset">Сбросить все</a>
         </div>
       </div>
     </form>
@@ -835,6 +914,7 @@ function renderStockFilters(rows, products, filters) {
 function renderOrderFilters(options, filters) {
   return `
     <form method="GET" action="/developers#orders" class="filters-form">
+      <input type="hidden" name="tab" value="orders">
       ${retainFilters(filters, "order_")}
       <div class="filters-grid">
         <div class="filter-field">
@@ -881,7 +961,7 @@ function renderOrderFilters(options, filters) {
         </div>
         <div class="filter-controls">
           <button type="submit" class="blue-button">Найти</button>
-          <a href="/developers#orders" class="filter-reset">Сбросить все</a>
+          <a href="/developers?tab=orders#orders" class="filter-reset">Сбросить все</a>
         </div>
       </div>
     </form>
@@ -918,6 +998,7 @@ async function syncCatalog(context) {
     updated: 0,
     unchanged: 0,
     excluded: 0,
+    archived: 0,
     warnings: []
   };
 
@@ -936,11 +1017,11 @@ async function syncCatalog(context) {
     const title = String(product?.title || slug);
 
     if (!slug || !uuidPattern.test(id)) {
-      report.warnings.push(
-        "Пропущен товар «" + title +
-        "»: отсутствует slug или product_id."
+      // Каталог неполон или повреждён: НЕ архивируем рабочие товары.
+      throw new Error(
+        "Синхронизация остановлена: у товара «" + title +
+        "» отсутствует корректный slug или product_id."
       );
-      continue;
     }
 
     if (
@@ -958,6 +1039,30 @@ async function syncCatalog(context) {
     for (const size of sizesOf(product)) {
       positions.push({ slug, id, size });
     }
+  }
+
+  /*
+    Pages CMS — источник состава каталога. Только по кнопке
+    архивируем в корзину позиции, которых уже нет в Pages CMS.
+    Физически inventory не удаляется: остатки и история заказов целы.
+    Отдельные исключения, созданные в CRM вручную, тоже сохраняются.
+  */
+  const wanted = new Set(positions.map(p => JSON.stringify([p.slug,p.size])));
+  const existingRows = await db.prepare(
+    "SELECT product_slug, size FROM inventory"
+  ).all();
+  for (const row of existingRows.results || []) {
+    const slug = String(row.product_slug);
+    const size = String(row.size || "");
+    if (wanted.has(JSON.stringify([slug,size]))) continue;
+
+    const archived = await db.prepare(
+      `INSERT INTO inventory_exclusions (product_slug, size, product_id)
+       SELECT product_slug, size, product_id FROM inventory
+       WHERE product_slug = ? AND size = ?
+       ON CONFLICT(product_slug,size) DO NOTHING`
+    ).bind(slug,size).run();
+    report.archived += Number(archived.meta?.changes || 0);
   }
 
   for (const item of positions) {
@@ -1105,7 +1210,12 @@ async function saveStock(context, form) {
          updated_at = CURRENT_TIMESTAMP
      WHERE product_slug = ? AND size = ?
        AND total_quantity = ?
-       AND reserved_quantity <= ?`
+       AND reserved_quantity <= ?
+       AND NOT EXISTS (
+         SELECT 1 FROM inventory_exclusions AS e
+         WHERE e.product_slug = inventory.product_slug
+           AND e.size = inventory.size
+       )`
   ).bind(
     quantity, slug, size, expected, quantity
   ).run();
@@ -1222,6 +1332,10 @@ async function saveStockBulk(context, form) {
         AND i.size = e.size
        WHERE i.total_quantity = e.previous
          AND i.reserved_quantity <= e.quantity
+         AND NOT EXISTS (
+           SELECT 1 FROM inventory_exclusions AS ex
+           WHERE ex.product_slug = i.product_slug AND ex.size = i.size
+         )
      ) = (SELECT COUNT(*) FROM edits)`
   ).bind(JSON.stringify(updated)).run();
 
@@ -1267,26 +1381,6 @@ async function deletionConfirmation(
     throw new Error("Складская позиция не найдена.");
   }
 
-  if (Number(item.reserved_quantity) > 0) {
-    throw new Error(
-      "Позиция находится в резерве. " +
-      "Сначала необходимо снять резерв."
-    );
-  }
-
-  const linked = await db.prepare(
-    `SELECT order_id FROM order_items
-     WHERE product_slug = ? AND size = ?
-     LIMIT 1`
-  ).bind(slug, size).first();
-
-  if (linked) {
-    throw new Error(
-      "Позиция связана с заказом. " +
-      "Удаление запрещено для сохранения истории."
-    );
-  }
-
   const total = Number(item.total_quantity);
   const expiry = Math.floor(Date.now() / 1000) + 300;
 
@@ -1310,15 +1404,15 @@ async function deletionConfirmation(
       <p>Текущий остаток: <b>${number(total)} шт.</b></p>
 
       <p>
-        Позиция будет удалена из таблицы inventory.
-        Если остаток больше нуля, его значение будет
-        потеряно. Товар останется в Pages CMS,
-        но станет недоступным для заказа.
+        Позиция переместится в отдельную вкладку «Корзина товаров».
+        Остаток, резерв и история заказов сохранятся.
+        Новые заказы по этой позиции будут запрещены.
+        Из Pages CMS товар не удаляется.
       </p>
 
       <p>
-        Ручная синхронизация не создаст
-        эту позицию повторно.
+        Синхронизация с Pages CMS не вернёт позицию сама.
+        Восстановить её можно из корзины.
       </p>
     </div>
 
@@ -1332,7 +1426,7 @@ async function deletionConfirmation(
       ${hidden("confirm_token", token)}
 
       <button class="danger-button" type="submit">
-        Да, удалить позицию
+        Да, переместить в корзину
       </button>
     </form>
 
@@ -1376,92 +1470,102 @@ async function deleteStock(context, secret, form) {
 
   const db = database(context.env);
 
-  /*
-    Обе операции выполняются в одной транзакции:
-    1. Запоминаем исключение.
-    2. Удаляем запись из inventory.
+  // Мягкое удаление: оставляем inventory и все связи с заказами.
+  // INSERT...SELECT фиксирует актуальный product_id в существующей таблице корзины.
+  const result = await db.prepare(
+    `INSERT INTO inventory_exclusions (product_slug, size, product_id)
+     SELECT product_slug, size, product_id
+     FROM inventory
+     WHERE product_slug = ? AND size = ? AND total_quantity = ?
+     ON CONFLICT(product_slug,size) DO NOTHING`
+  ).bind(slug,size,total).run();
 
-    Проверки резервов, количества и заказов
-    выполняются непосредственно в SQL.
-  */
-
-  const statements = [
-    db.prepare(
-      `INSERT INTO inventory_exclusions (
-         product_slug, size, product_id
-       )
-       SELECT product_slug, size, product_id
-       FROM inventory
-       WHERE product_slug = ?
-         AND size = ?
-         AND total_quantity = ?
-         AND reserved_quantity = 0
-         AND NOT EXISTS (
-           SELECT 1 FROM order_items AS oi
-           WHERE oi.product_slug = inventory.product_slug
-             AND oi.size = inventory.size
-         )
-       ON CONFLICT(product_slug, size)
-       DO UPDATE SET
-         product_id = excluded.product_id,
-         deleted_at = CURRENT_TIMESTAMP`
-    ).bind(slug, size, total),
-
-    db.prepare(
-      `DELETE FROM inventory
-       WHERE product_slug = ?
-         AND size = ?
-         AND total_quantity = ?
-         AND reserved_quantity = 0
-         AND EXISTS (
-           SELECT 1 FROM inventory_exclusions AS ex
-           WHERE ex.product_slug = inventory.product_slug
-             AND ex.size = inventory.size
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM order_items AS oi
-           WHERE oi.product_slug = inventory.product_slug
-             AND oi.size = inventory.size
-         )`
-    ).bind(slug, size, total)
-  ];
-
-  const results = await db.batch(statements);
-
-  if (
-    results[0]?.meta?.changes !== 1 ||
-    results[1]?.meta?.changes !== 1
-  ) {
-    throw new Error(
-      "Удаление не выполнено. " +
-      "Возможно, остаток или резерв изменился. " +
-      "Обнови страницу."
-    );
+  if (Number(result.meta?.changes || 0) !== 1) {
+    throw new Error("Позиция уже в корзине либо её остаток изменился. Обнови страницу.");
   }
 
-  return "Удалена позиция: " + slug +
-    " / " + (size || "Без размера") + ".";
+  return "Позиция перемещена в корзину: " +
+    slug + " / " + (size || "Без размера") + ".";
 }
 
 /* ВОССТАНОВЛЕНИЕ ИСКЛЮЧЕНИЯ */
 
 async function restoreStock(context, form) {
   const { slug, size } = parsePosition(form);
-
-  const result = await database(context.env).prepare(
-    `DELETE FROM inventory_exclusions
-     WHERE product_slug = ? AND size = ?`
-  ).bind(slug, size).run();
-
-  if (result.meta?.changes !== 1) {
-    throw new Error("Исключение уже отсутствует.");
+  const products = await productsFromCMS(context);
+  const product = products.find(p => String(p?.slug || "") === slug);
+  if (!product || !sizesOf(product).includes(size)) {
+    throw new Error("В Pages CMS этого товара или варианта уже нет. " +
+      "Сначала восстанови его в Pages CMS, затем повтори операцию.");
   }
-
-  return (
-    "Исключение снято. Нажми «Синхронизировать " +
-    "с Pages CMS», чтобы создать позицию с остатком 0."
-  );
+  const db = database(context.env);
+  const archivedId = await db.prepare(
+    "SELECT product_id FROM inventory_exclusions WHERE product_slug = ? AND size = ?"
+  ).bind(slug,size).first();
+  if (archivedId?.product_id &&
+      String(archivedId.product_id).toLowerCase() !==
+      String(product.product_id || "").toLowerCase()) {
+    throw new Error("Идентификатор товара отличается от удалённого. " +
+      "Не восстанавливай старые остатки для новой карточки.");
+  }
+  const result = await db.prepare(
+    "DELETE FROM inventory_exclusions WHERE product_slug = ? AND size = ?"
+  ).bind(slug, size).run();
+  if (Number(result.meta?.changes || 0) !== 1) {
+    throw new Error("Позиция уже восстановлена.");
+  }
+  const exists = await db.prepare(
+    "SELECT 1 FROM inventory WHERE product_slug = ? AND size = ?"
+  ).bind(slug,size).first();
+  return exists
+    ? "Позиция возвращена на рабочий склад (остатки сохранены)."
+    : "Позиция восстановлена. Нажми «Синхронизировать с Pages CMS», чтобы создать её с нулевым остатком.";
 }
+
+async function trashProduct(context, form) {
+  const slug = String(form.get("product_slug") || "").trim();
+  if (!slug || slug.length > 300) throw new Error("Некорректный товар.");
+  const db = database(context.env);
+  const result = await db.prepare(
+    `INSERT INTO inventory_exclusions (product_slug, size, product_id)
+     SELECT product_slug, size, product_id FROM inventory
+     WHERE product_slug = ?
+     ON CONFLICT(product_slug,size) DO NOTHING`
+  ).bind(slug).run();
+  const count = Number(result.meta?.changes || 0);
+  if (!count) throw new Error("Товар уже в корзине или не найден на складе.");
+  return "Товар «" + slug + "» перемещён в корзину. Позиций: " + count +
+    ". Остатки и заказы сохранены.";
+}
+
+async function restoreProduct(context, form) {
+  const slug = String(form.get("product_slug") || "").trim();
+  if (!slug || slug.length > 300) throw new Error("Некорректный товар.");
+  const products = await productsFromCMS(context);
+  const product = products.find(p => String(p?.slug || "") === slug);
+  if (!product) throw new Error("Сначала верни товар в Pages CMS.");
+  const allowedSizes = sizesOf(product);
+  const db = database(context.env);
+  const differentId = await db.prepare(
+    `SELECT 1 FROM inventory_exclusions
+     WHERE product_slug = ? AND product_id IS NOT NULL
+       AND lower(product_id) <> lower(?)
+     LIMIT 1`
+  ).bind(slug,String(product.product_id || "")).first();
+  if (differentId) {
+    throw new Error("Это новая карточка с прежним адресом, но другим ID. " +
+      "Автоматически переносить на неё старые остатки нельзя.");
+  }
+  const removed = await db.prepare(
+    `DELETE FROM inventory_exclusions
+     WHERE product_slug = ?
+       AND size IN (SELECT value FROM json_each(?))`
+  ).bind(slug,JSON.stringify(allowedSizes)).run();
+  return "Товар восстановлен из корзины. Позиций: " +
+    Number(removed.meta?.changes || 0) +
+    ". Если некоторые позиции были удалены ранее, нажми кнопку синхронизации.";
+}
+
 
 /* ОТОБРАЖЕНИЕ ДАННЫХ */
 
@@ -1515,8 +1619,11 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
   }
 
   const names = productNames(products);
+  const seenProducts = new Set();
   const body = rows.map(item => {
     const slug = String(item.product_slug);
+    const firstOfProduct = !seenProducts.has(slug);
+    seenProducts.add(slug);
     const size = String(item.size || "");
     const sizeLabel = displayPositionSize(slug,size,products);
     const title = getProductTitle(item, names);
@@ -1550,9 +1657,18 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
             ${hidden("product_slug", slug)}
             ${hidden("size", size)}
             <button class="outline-danger" type="submit">
-              Удалить
+              В корзину
             </button>
           </form>
+          ${firstOfProduct ? `
+          <form method="POST" action="${esc(formAction)}"
+                onsubmit="return confirm('Переместить ВСЕ размеры и цвета товара в корзину?');">
+            ${hidden("action", "stock-trash-product")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", slug)}
+            <button class="outline-danger" type="submit"
+                    style="margin-top:7px">Весь товар</button>
+          </form>` : ""}
         </td>
       </tr>
     `;
@@ -1592,54 +1708,66 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
 }
 
 function renderExcluded(rows, products, csrf, formAction = "/developers") {
-  if (!rows.length) return "";
-
+  if (!rows.length) {
+    return '<p class="muted">Корзина товаров пуста.</p>';
+  }
   const names = productNames(products);
-
-  const body = rows.map(item => `
-    <tr>
-      <td>
-        <strong>${esc(getProductTitle(item, names))}</strong>
-        <small>${esc(item.product_slug)}</small>
-      </td>
-      <td>${esc(displayPositionSize(item.product_slug,item.size,products))}</td>
-      <td>
-        <form method="POST" action="${esc(formAction)}">
-          ${hidden("action", "stock-restore")}
-          ${hidden("csrf", csrf)}
-          ${hidden("product_slug", item.product_slug)}
-          ${hidden("size", item.size)}
-
-          <button class="blue-button" type="submit">
-            Восстановить
-          </button>
-        </form>
-      </td>
-    </tr>
-  `).join("");
-
-  return `
-    <section class="section">
-      <h3>Удалённые складские позиции</h3>
-      <p class="muted">
-        Эти позиции отсутствуют в inventory.
-        Синхронизация с Pages CMS их пропускает.
-      </p>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Товар</th>
-              <th>Размер</th>
-              <th>Действие</th>
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
-    </section>
-  `;
+  const grouped = new Map();
+  for (const row of rows) {
+    const slug = String(row.product_slug);
+    if (!grouped.has(slug)) grouped.set(slug, []);
+    grouped.get(slug).push(row);
+  }
+  return [...grouped].map(([slug, positions]) => {
+    const example = positions[0];
+    const title = getProductTitle(example,names);
+    const availableOnPages = products.some(p => p?.slug === slug);
+    const rowsHtml = positions.map(item => `
+      <tr>
+        <td>${esc(displayPositionSize(item.product_slug,item.size,products))}</td>
+        <td class="num">${item.total_quantity == null ? "—" : number(item.total_quantity)}</td>
+        <td class="num">${item.reserved_quantity == null ? "—" : number(item.reserved_quantity)}</td>
+        <td>
+          <form method="POST" action="${esc(formAction)}">
+            ${hidden("action", "stock-restore")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", item.product_slug)}
+            ${hidden("size", item.size)}
+            <button class="blue-button" type="submit"
+                    ${availableOnPages ? "" : "disabled"}>
+              Восстановить позицию
+            </button>
+          </form>
+        </td>
+      </tr>`).join("");
+    return `
+      <section class="section">
+        <div class="order-header">
+          <div>
+            <h3>${esc(title)}</h3>
+            <p class="muted">Адрес: ${esc(slug)} · Позиций: ${number(positions.length)}</p>
+          </div>
+          <form method="POST" action="${esc(formAction)}">
+            ${hidden("action", "stock-restore-product")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", slug)}
+            <button class="blue-button" type="submit"
+                    ${availableOnPages ? "" : "disabled"}>
+              Восстановить товар
+            </button>
+          </form>
+        </div>
+        ${availableOnPages ? "" :
+          '<p class="warning">Товара нет в Pages CMS. Сначала восстановите карточку в Pages, затем её можно вернуть на склад.</p>'}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Цвет / размер</th><th>Остаток</th>
+            <th>Резерв</th><th>Действие</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </section>`;
+  }).join("");
 }
 
 function renderReport(report) {
@@ -1653,6 +1781,7 @@ function renderReport(report) {
       Обновлено: ${report.updated}.
       Без изменений: ${report.unchanged}.
       Исключено: ${report.excluded}.
+      Перемещено в корзину: ${report.archived}.
     </div>
 
     ${report.warnings.length ? `
@@ -1673,13 +1802,19 @@ async function dashboard(context, secret, options = {}) {
   let orders = [];
   let orderChoices = { statuses: [], shipping: [], sources: [], products: [] };
   const filters = readDashboardFilters(context.request);
-  const query = filteredQuery(filters);
-  const formAction = "/developers" + (query ? "?" + query : "");
+  const requestedTab = new URL(context.request.url).searchParams.get("tab");
+  const tab = ["stock","trash","orders"].includes(requestedTab)
+    ? requestedTab : "stock";
+  const queryParameters = new URLSearchParams(filteredQuery(filters));
+  queryParameters.set("tab",tab);
+  const formAction = "/developers?" + queryParameters.toString();
   const problems = [];
+  let reserveCheck = {mismatches:0,missing:0};
 
   try {
     stock = await inventoryRows(context.env);
     excluded = await excludedRows(context.env);
+    reserveCheck = await reserveDiagnostics(context.env);
   } catch (error) {
     console.error(error);
     problems.push(
@@ -1717,93 +1852,95 @@ async function dashboard(context, secret, options = {}) {
   return `
     <div class="success">✓ Вы авторизованы</div>
 
-    <h2>Склад</h2>
+    <nav class="admin-tabs" aria-label="Разделы CRM">
+      <a href="/developers?tab=stock" class="${tab==="stock"?"active":""}">Склад</a>
+      <a href="/developers?tab=trash" class="${tab==="trash"?"active":""}">
+        Корзина товаров <span class="tab-count">${number(excluded.length)}</span>
+      </a>
+      <a href="/developers?tab=orders" class="${tab==="orders"?"active":""}">Заказы</a>
+    </nav>
 
-    <div class="stats">
-      <div class="stat">
-        <span>На складе</span>
-        <strong>${number(total)}</strong>
-      </div>
-
-      <div class="stat">
-        <span>В резерве</span>
-        <strong>${number(reserved)}</strong>
-      </div>
-
-      <div class="stat">
-        <span>Доступно</span>
-        <strong class="green">${number(total - reserved)}</strong>
-      </div>
-    </div>
-
-    ${options.message ? `
-      <div class="success">✓ ${esc(options.message)}</div>
-    ` : ""}
-
-    ${options.error ? `
-      <div class="error">${esc(options.error)}</div>
-    ` : ""}
-
-    ${problems.map(x =>
-      `<div class="error">${esc(x)}</div>`
-    ).join("")}
-
+    ${options.message ? `<div class="success">✓ ${esc(options.message)}</div>` : ""}
+    ${options.error ? `<div class="error">${esc(options.error)}</div>` : ""}
+    ${problems.map(x => `<div class="error">${esc(x)}</div>`).join("")}
     ${renderReport(options.report)}
 
-    <section class="section" id="stock">
-      <h3>Складские остатки</h3>
-      <p class="muted">
-        Фильтры обновляются из текущего склада и каталога товаров.
-        Названия и размеры появятся автоматически после синхронизации.
-      </p>
-      ${renderStockFilters(stock, products, filters)}
-      <p class="muted">
-        Найдено позиций: ${number(filterStockRows(stock, products, filters).length)}.
-        Показатели «На складе / В резерве / Доступно» выше — общие,
-        без учёта фильтра.
-      </p>
-
-      <div class="sync-area">
-        <p class="muted">
-          Синхронизация с Pages CMS выполняется вручную.
-          Удалённые позиции не создаются повторно.
-        </p>
-
-        <form method="POST" action="${esc(formAction)}#stock">
-          ${hidden("action", "sync")}
-          ${hidden("csrf", csrf)}
-
-          <button class="blue-button" type="submit">
-            ↻ Синхронизировать с Pages CMS
-          </button>
-        </form>
+    ${tab === "stock" ? `
+      <h2>Склад</h2>
+      <div class="stats">
+        <div class="stat"><span>На складе</span><strong>${number(total)}</strong></div>
+        <div class="stat"><span>В резерве</span><strong>${number(reserved)}</strong></div>
+        <div class="stat"><span>Доступно</span>
+          <strong class="green">${number(total-reserved)}</strong></div>
       </div>
 
-      ${renderInventory(filterStockRows(stock, products, filters), products, csrf, formAction)}
+      <section class="section" id="stock">
+        <h3>Складские остатки</h3>
+        <p class="muted">На рабочем складе только активные товары.
+          Позиции из корзины сохраняются в D1, но сюда не попадают.</p>
+        ${renderStockFilters(stock,products,filters)}
+        <p class="muted">Найдено позиций: ${number(filterStockRows(stock,products,filters).length)}.
+          Счётчики выше показывают только рабочий склад.</p>
+        <div class="sync-area">
+          <p class="muted"><strong>Ручная синхронизация.</strong>
+            Только по нажатию этой кнопки CRM сверяет каталог Pages CMS,
+            добавляет новые размеры и цвета, а отсутствующие в Pages позиции
+            перемещает в «Корзину товаров». Ничего не удаляется физически.</p>
+          <form method="POST" action="${esc(formAction)}#stock">
+            ${hidden("action","sync")}
+            ${hidden("csrf",csrf)}
+            <button class="blue-button" type="submit"
+              onclick="return confirm('Сверить товары с Pages CMS? Отсутствующие в Pages позиции перейдут в Корзину товаров.');">
+              ↻ Синхронизировать с Pages CMS
+            </button>
+          </form>
+        </div>
+        ${reserveCheck.mismatches || reserveCheck.missing ? `
+          <div class="warning">
+            <strong>Обнаружено расхождение резервов.</strong>
+            Позиций с неверным резервом: ${number(reserveCheck.mismatches)}.
+            Резервных заказов без складской позиции: ${number(reserveCheck.missing)}.
+            Возможно, заказы были удалены напрямую в D1.
+            <form method="POST" action="${esc(formAction)}#stock"
+              onsubmit="return confirm('Пересчитать резерв строго по действующим заказам со статусом В резерве?');">
+              ${hidden("action","repair-reservations")}
+              ${hidden("csrf",csrf)}
+              <button class="blue-button" type="submit"
+                ${reserveCheck.missing?"disabled":""}>
+                Исправить резервы по заказам
+              </button>
+            </form>
+          </div>` : `
+          <p class="muted">✓ Резервы согласованы с действующими заказами.</p>`}
+        ${renderInventory(filterStockRows(stock,products,filters),products,csrf,formAction)}
+        <p class="muted">«В корзину» скрывает позицию с рабочего склада, не стирая
+          реальные остатки и историю заказов. Для всех цветов/размеров одного
+          товара используйте «Весь товар».</p>
+      </section>
+    ` : ""}
 
-      <p class="muted">
-        Удаление требует подтверждения.
-        Если позиция находится в резерве
-        или связана с заказом, удалить её нельзя.
-      </p>
-    </section>
+    ${tab === "trash" ? `
+      <h2>Корзина товаров</h2>
+      <p class="muted">Здесь собраны позиции, удалённые из CRM вручную или
+        отсутствовавшие в Pages CMS при последней ручной синхронизации.
+        Остатки, резервы и история заказов в D1 сохранены.
+        Чтобы восстановить товар, он должен существовать в Pages CMS.</p>
+      ${renderExcluded(excluded,products,csrf,formAction)}
+    ` : ""}
 
-    ${renderExcluded(excluded, products, csrf, formAction)}
-
-    <section class="section" id="orders">
-      <div class="order-header">
-        <h3>Заказы (${orders.length})</h3>
-        <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
-      </div>
-      <p class="muted">
-        Поиск и фильтры работают по всей базе заказов.
-        Показаны до 100 последних совпадений.
-        Список статусов и товаров составляется из D1 автоматически.
-      </p>
-      ${renderOrderFilters(orderChoices, filters)}
-      <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
-      ${renderOrders(orders, csrf, formAction)}
-    </section>
+    ${tab === "orders" ? `
+      <section class="section" id="orders">
+        <div class="order-header">
+          <h2>Заказы (${orders.length})</h2>
+          <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
+        </div>
+        <p class="muted">Показаны до 100 последних совпадений.
+          Поиск и фильтры работают по всей базе заказов D1.</p>
+        ${renderOrderFilters(orderChoices,filters)}
+        <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
+        ${renderOrders(orders,csrf,formAction)}
+      </section>
+    ` : ""}
 
     <form method="POST" action="/developers">
       ${hidden("action", "logout")}
@@ -1927,6 +2064,27 @@ h3 { font-size: 19px; margin: 0 0 15px; }
   padding: 25px;
   margin: 25px 0;
 }
+.admin-tabs {
+  display:flex; flex-wrap:wrap; gap:9px; align-items:center;
+  margin:22px 0 25px; padding-bottom:14px;
+  border-bottom:1px solid #dce6ee;
+}
+.admin-tabs a {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:11px 15px; border-radius:9px;
+  border:1px solid #dce6ee;
+  background:#f5f7fa; text-decoration:none;
+  color:#435c70; font-weight:700; font-size:14px;
+}
+.admin-tabs a.active {
+  background:#102c43; color:white; border-color:#102c43;
+}
+.admin-tabs a:hover:not(.active) {background:#eaf1f6;}
+.admin-tabs .tab-count {
+  background:#dce8f0; color:#193c54; border-radius:20px;
+  padding:2px 7px; font-size:11px;
+}
+.admin-tabs .active .tab-count {background:#e4d7e9;}
 .sync-area {
   background: #f5f9fc;
   border: 1px solid #dbe8ef;
@@ -2307,6 +2465,18 @@ export async function onRequestPost(context) {
 
       case "sync":
         report = await syncCatalog(context);
+        break;
+
+      case "repair-reservations":
+        message = await repairReservations(context.env);
+        break;
+
+      case "stock-trash-product":
+        message = await trashProduct(context,form);
+        break;
+
+      case "stock-restore-product":
+        message = await restoreProduct(context,form);
         break;
 
       case "stock-bulk-save":
