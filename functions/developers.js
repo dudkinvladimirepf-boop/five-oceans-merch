@@ -1589,8 +1589,11 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
   }
 
   const names = productNames(products);
+  const seenProducts = new Set();
   const body = rows.map(item => {
     const slug = String(item.product_slug);
+    const firstOfProduct = !seenProducts.has(slug);
+    seenProducts.add(slug);
     const size = String(item.size || "");
     const sizeLabel = displayPositionSize(slug,size,products);
     const title = getProductTitle(item, names);
@@ -1624,9 +1627,18 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
             ${hidden("product_slug", slug)}
             ${hidden("size", size)}
             <button class="outline-danger" type="submit">
-              Удалить
+              В корзину
             </button>
           </form>
+          ${firstOfProduct ? `
+          <form method="POST" action="${esc(formAction)}"
+                onsubmit="return confirm('Переместить ВСЕ размеры и цвета товара в корзину?');">
+            ${hidden("action", "stock-trash-product")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", slug)}
+            <button class="outline-danger" type="submit"
+                    style="margin-top:7px">Весь товар</button>
+          </form>` : ""}
         </td>
       </tr>
     `;
@@ -1666,54 +1678,66 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
 }
 
 function renderExcluded(rows, products, csrf, formAction = "/developers") {
-  if (!rows.length) return "";
-
+  if (!rows.length) {
+    return '<p class="muted">Корзина товаров пуста.</p>';
+  }
   const names = productNames(products);
-
-  const body = rows.map(item => `
-    <tr>
-      <td>
-        <strong>${esc(getProductTitle(item, names))}</strong>
-        <small>${esc(item.product_slug)}</small>
-      </td>
-      <td>${esc(displayPositionSize(item.product_slug,item.size,products))}</td>
-      <td>
-        <form method="POST" action="${esc(formAction)}">
-          ${hidden("action", "stock-restore")}
-          ${hidden("csrf", csrf)}
-          ${hidden("product_slug", item.product_slug)}
-          ${hidden("size", item.size)}
-
-          <button class="blue-button" type="submit">
-            Восстановить
-          </button>
-        </form>
-      </td>
-    </tr>
-  `).join("");
-
-  return `
-    <section class="section">
-      <h3>Удалённые складские позиции</h3>
-      <p class="muted">
-        Эти позиции отсутствуют в inventory.
-        Синхронизация с Pages CMS их пропускает.
-      </p>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Товар</th>
-              <th>Размер</th>
-              <th>Действие</th>
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
-    </section>
-  `;
+  const grouped = new Map();
+  for (const row of rows) {
+    const slug = String(row.product_slug);
+    if (!grouped.has(slug)) grouped.set(slug, []);
+    grouped.get(slug).push(row);
+  }
+  return [...grouped].map(([slug, positions]) => {
+    const example = positions[0];
+    const title = getProductTitle(example,names);
+    const availableOnPages = products.some(p => p?.slug === slug);
+    const rowsHtml = positions.map(item => `
+      <tr>
+        <td>${esc(displayPositionSize(item.product_slug,item.size,products))}</td>
+        <td class="num">${item.total_quantity == null ? "—" : number(item.total_quantity)}</td>
+        <td class="num">${item.reserved_quantity == null ? "—" : number(item.reserved_quantity)}</td>
+        <td>
+          <form method="POST" action="${esc(formAction)}">
+            ${hidden("action", "stock-restore")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", item.product_slug)}
+            ${hidden("size", item.size)}
+            <button class="blue-button" type="submit"
+                    ${availableOnPages ? "" : "disabled"}>
+              Восстановить позицию
+            </button>
+          </form>
+        </td>
+      </tr>`).join("");
+    return `
+      <section class="section">
+        <div class="order-header">
+          <div>
+            <h3>${esc(title)}</h3>
+            <p class="muted">Адрес: ${esc(slug)} · Позиций: ${number(positions.length)}</p>
+          </div>
+          <form method="POST" action="${esc(formAction)}">
+            ${hidden("action", "stock-restore-product")}
+            ${hidden("csrf", csrf)}
+            ${hidden("product_slug", slug)}
+            <button class="blue-button" type="submit"
+                    ${availableOnPages ? "" : "disabled"}>
+              Восстановить товар
+            </button>
+          </form>
+        </div>
+        ${availableOnPages ? "" :
+          '<p class="warning">Товара нет в Pages CMS. Сначала восстановите карточку в Pages, затем её можно вернуть на склад.</p>'}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Цвет / размер</th><th>Остаток</th>
+            <th>Резерв</th><th>Действие</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </section>`;
+  }).join("");
 }
 
 function renderReport(report) {
@@ -1727,6 +1751,7 @@ function renderReport(report) {
       Обновлено: ${report.updated}.
       Без изменений: ${report.unchanged}.
       Исключено: ${report.excluded}.
+      Перемещено в корзину: ${report.archived}.
     </div>
 
     ${report.warnings.length ? `
