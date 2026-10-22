@@ -183,9 +183,11 @@ function productVariantTitle(product, stockSize) {
   const variant = match && Array.isArray(product.variants)
     ? product.variants.find(v => v && v.code === match[1])
     : null;
-  return variant ? String(product.title || product.slug) +
-    " — " + String(variant.label || variant.code) :
-    String(product.title || product.slug);
+  const title = String(product.title || product.slug);
+  const design = String(product.design || "").trim();
+  const base = title + (design && !title.includes(design) ? " — " + design : "");
+  return variant ? base + " — " +
+    String(variant.label || variant.code) : base;
 }
 
 function productPrice(product) {
