@@ -456,17 +456,7 @@ function createProductCard(product) {
     )
   );
 
-  /* Описание */
-
-  if (product.description) {
-    info.appendChild(
-      createElement(
-        "p",
-        "description",
-        product.description
-      )
-    );
-  }
+  /* Полное описание показывается только на странице товара. */
 
   /* Цена */
 
