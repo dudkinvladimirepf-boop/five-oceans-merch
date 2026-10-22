@@ -383,24 +383,29 @@ footer {
 
 <script>
 
-function catalogVariant(product) {
-  const variants=Array.isArray(product.variants)?product.variants.filter(Boolean):[];
-  const hasPhotos=v=>Array.isArray(v.photos)&&v.photos.some(Boolean);
-  return variants.find(v=>v.available===true&&hasPhotos(v)) ||
-    variants.find(v=>v.available===true) ||
-    variants.find(hasPhotos) || variants[0] || null;
+function catalogVariant(product, highlight = null) {
+  const variants = Array.isArray(product.variants)
+    ? product.variants.filter(v => v && /^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code || ""))
+    : [];
+  const active = variants.filter(v => v.available === true);
+  const choices = highlight
+    ? active.filter(v => v[highlight] === true)
+    : (active.length ? active : variants);
+  const hasPhoto = v => Array.isArray(v.photos) && v.photos.some(Boolean);
+  return choices.find(hasPhoto) || choices[0] || null;
 }
-function catalogPhoto(product) {
-  const variant=catalogVariant(product);
-  // Не подменяем фото выбранного цвета снимком из общих фото.
-  if (variant) {
-    return Array.isArray(variant.photos)?variant.photos.find(Boolean)||null:null;
-  }
-  return Array.isArray(product.photos)?product.photos.find(Boolean)||null:null;
+function catalogPhoto(product, highlight = null) {
+  const variant = catalogVariant(product, highlight);
+  return variant && Array.isArray(variant.photos)
+    ? variant.photos.find(Boolean) || null : null;
 }
 function catalogAvailable(product) {
-  const variants=Array.isArray(product.variants)?product.variants:[];
-  return product.available===true && (!variants.length || variants.some(v=>v?.available===true));
+  return Array.isArray(product.variants) &&
+    product.variants.some(v => v && v.available === true);
+}
+function catalogHighlighted(product, field) {
+  return Array.isArray(product.variants) &&
+    product.variants.some(v => v && v.available === true && v[field] === true);
 }
 
 /* ОБЩИЕ ФУНКЦИИ */
@@ -528,7 +533,7 @@ function createCategoryCard(category, products) {
 
 /* СОЗДАНИЕ КАРТОЧКИ ТОВАРА */
 
-function createProductCard(product, categories) {
+function createProductCard(product, categories, highlight = null) {
 
   const card = makeElement("a", "category");
 
@@ -536,9 +541,11 @@ function createProductCard(product, categories) {
     normalize(c.id) === normalize(product.category)
   );
 
+  const selectedColor = catalogVariant(product, highlight);
   if (product.slug) {
     card.href = "/product.html?slug=" +
-      encodeURIComponent(product.slug);
+      encodeURIComponent(product.slug) +
+      (selectedColor ? "&color=" + encodeURIComponent(selectedColor.code) : "");
   } else if (category) {
     card.href = "/category.html?slug=" +
       encodeURIComponent(category.slug);
@@ -548,7 +555,8 @@ function createProductCard(product, categories) {
 
   const cover = makeElement("div", "category-cover");
 
-  const photos = catalogPhoto(product) ? [catalogPhoto(product)] : [];
+  const photo = catalogPhoto(product, highlight);
+  const photos = photo ? [photo] : [];
 
   if (photos.length) {
     const img = document.createElement("img");
@@ -611,7 +619,8 @@ function createShowcase(id, title, description, items, categories) {
 
   items.forEach(product => {
     grid.appendChild(
-      createProductCard(product, categories)
+      createProductCard(product, categories,
+        id === "new-arrivals" ? "new_arrival" : "featured")
     );
   });
 
@@ -672,15 +681,13 @@ async function loadHomepage() {
     /* 2. ОТБИРАЕМ НОВИНКИ */
 
     const newProducts = products.filter(p =>
-      p.new_arrival === true &&
-      catalogAvailable(p)
+      catalogHighlighted(p, "new_arrival")
     );
 
     /* 3. ОТБИРАЕМ НАШ ВЫБОР */
 
     const featuredProducts = products.filter(p =>
-      p.featured === true &&
-      catalogAvailable(p)
+      catalogHighlighted(p, "featured")
     );
 
     /* 4. СОЗДАЁМ БЛОКИ В НУЖНОМ ПОРЯДКЕ */
