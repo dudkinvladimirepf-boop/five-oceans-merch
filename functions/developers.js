@@ -878,6 +878,7 @@ function renderStockFilters(rows, products, filters) {
 
   return `
     <form method="GET" action="/developers#stock" class="filters-form">
+      <input type="hidden" name="tab" value="stock">
       ${retainFilters(filters, "stock_")}
       <div class="filters-grid">
         <div class="filter-field">
@@ -903,7 +904,7 @@ function renderStockFilters(rows, products, filters) {
         </div>
         <div class="filter-controls">
           <button type="submit" class="blue-button">Найти</button>
-          <a href="/developers#stock" class="filter-reset">Сбросить все</a>
+          <a href="/developers?tab=stock#stock" class="filter-reset">Сбросить все</a>
         </div>
       </div>
     </form>
@@ -913,6 +914,7 @@ function renderStockFilters(rows, products, filters) {
 function renderOrderFilters(options, filters) {
   return `
     <form method="GET" action="/developers#orders" class="filters-form">
+      <input type="hidden" name="tab" value="orders">
       ${retainFilters(filters, "order_")}
       <div class="filters-grid">
         <div class="filter-field">
@@ -959,7 +961,7 @@ function renderOrderFilters(options, filters) {
         </div>
         <div class="filter-controls">
           <button type="submit" class="blue-button">Найти</button>
-          <a href="/developers#orders" class="filter-reset">Сбросить все</a>
+          <a href="/developers?tab=orders#orders" class="filter-reset">Сбросить все</a>
         </div>
       </div>
     </form>
@@ -1772,13 +1774,19 @@ async function dashboard(context, secret, options = {}) {
   let orders = [];
   let orderChoices = { statuses: [], shipping: [], sources: [], products: [] };
   const filters = readDashboardFilters(context.request);
-  const query = filteredQuery(filters);
-  const formAction = "/developers" + (query ? "?" + query : "");
+  const requestedTab = new URL(context.request.url).searchParams.get("tab");
+  const tab = ["stock","trash","orders"].includes(requestedTab)
+    ? requestedTab : "stock";
+  const queryParameters = new URLSearchParams(filteredQuery(filters));
+  queryParameters.set("tab",tab);
+  const formAction = "/developers?" + queryParameters.toString();
   const problems = [];
+  let reserveCheck = {mismatches:0,missing:0};
 
   try {
     stock = await inventoryRows(context.env);
     excluded = await excludedRows(context.env);
+    reserveCheck = await reserveDiagnostics(context.env);
   } catch (error) {
     console.error(error);
     problems.push(
@@ -1816,93 +1824,95 @@ async function dashboard(context, secret, options = {}) {
   return `
     <div class="success">✓ Вы авторизованы</div>
 
-    <h2>Склад</h2>
+    <nav class="admin-tabs" aria-label="Разделы CRM">
+      <a href="/developers?tab=stock" class="${tab==="stock"?"active":""}">Склад</a>
+      <a href="/developers?tab=trash" class="${tab==="trash"?"active":""}">
+        Корзина товаров <span class="tab-count">${number(excluded.length)}</span>
+      </a>
+      <a href="/developers?tab=orders" class="${tab==="orders"?"active":""}">Заказы</a>
+    </nav>
 
-    <div class="stats">
-      <div class="stat">
-        <span>На складе</span>
-        <strong>${number(total)}</strong>
-      </div>
-
-      <div class="stat">
-        <span>В резерве</span>
-        <strong>${number(reserved)}</strong>
-      </div>
-
-      <div class="stat">
-        <span>Доступно</span>
-        <strong class="green">${number(total - reserved)}</strong>
-      </div>
-    </div>
-
-    ${options.message ? `
-      <div class="success">✓ ${esc(options.message)}</div>
-    ` : ""}
-
-    ${options.error ? `
-      <div class="error">${esc(options.error)}</div>
-    ` : ""}
-
-    ${problems.map(x =>
-      `<div class="error">${esc(x)}</div>`
-    ).join("")}
-
+    ${options.message ? `<div class="success">✓ ${esc(options.message)}</div>` : ""}
+    ${options.error ? `<div class="error">${esc(options.error)}</div>` : ""}
+    ${problems.map(x => `<div class="error">${esc(x)}</div>`).join("")}
     ${renderReport(options.report)}
 
-    <section class="section" id="stock">
-      <h3>Складские остатки</h3>
-      <p class="muted">
-        Фильтры обновляются из текущего склада и каталога товаров.
-        Названия и размеры появятся автоматически после синхронизации.
-      </p>
-      ${renderStockFilters(stock, products, filters)}
-      <p class="muted">
-        Найдено позиций: ${number(filterStockRows(stock, products, filters).length)}.
-        Показатели «На складе / В резерве / Доступно» выше — общие,
-        без учёта фильтра.
-      </p>
-
-      <div class="sync-area">
-        <p class="muted">
-          Синхронизация с Pages CMS выполняется вручную.
-          Удалённые позиции не создаются повторно.
-        </p>
-
-        <form method="POST" action="${esc(formAction)}#stock">
-          ${hidden("action", "sync")}
-          ${hidden("csrf", csrf)}
-
-          <button class="blue-button" type="submit">
-            ↻ Синхронизировать с Pages CMS
-          </button>
-        </form>
+    ${tab === "stock" ? `
+      <h2>Склад</h2>
+      <div class="stats">
+        <div class="stat"><span>На складе</span><strong>${number(total)}</strong></div>
+        <div class="stat"><span>В резерве</span><strong>${number(reserved)}</strong></div>
+        <div class="stat"><span>Доступно</span>
+          <strong class="green">${number(total-reserved)}</strong></div>
       </div>
 
-      ${renderInventory(filterStockRows(stock, products, filters), products, csrf, formAction)}
+      <section class="section" id="stock">
+        <h3>Складские остатки</h3>
+        <p class="muted">На рабочем складе только активные товары.
+          Позиции из корзины сохраняются в D1, но сюда не попадают.</p>
+        ${renderStockFilters(stock,products,filters)}
+        <p class="muted">Найдено позиций: ${number(filterStockRows(stock,products,filters).length)}.
+          Счётчики выше показывают только рабочий склад.</p>
+        <div class="sync-area">
+          <p class="muted"><strong>Ручная синхронизация.</strong>
+            Только по нажатию этой кнопки CRM сверяет каталог Pages CMS,
+            добавляет новые размеры и цвета, а отсутствующие в Pages позиции
+            перемещает в «Корзину товаров». Ничего не удаляется физически.</p>
+          <form method="POST" action="${esc(formAction)}#stock">
+            ${hidden("action","sync")}
+            ${hidden("csrf",csrf)}
+            <button class="blue-button" type="submit"
+              onclick="return confirm('Сверить товары с Pages CMS? Отсутствующие в Pages позиции перейдут в Корзину товаров.');">
+              ↻ Синхронизировать с Pages CMS
+            </button>
+          </form>
+        </div>
+        ${reserveCheck.mismatches || reserveCheck.missing ? `
+          <div class="warning">
+            <strong>Обнаружено расхождение резервов.</strong>
+            Позиций с неверным резервом: ${number(reserveCheck.mismatches)}.
+            Резервных заказов без складской позиции: ${number(reserveCheck.missing)}.
+            Возможно, заказы были удалены напрямую в D1.
+            <form method="POST" action="${esc(formAction)}#stock"
+              onsubmit="return confirm('Пересчитать резерв строго по действующим заказам со статусом В резерве?');">
+              ${hidden("action","repair-reservations")}
+              ${hidden("csrf",csrf)}
+              <button class="blue-button" type="submit"
+                ${reserveCheck.missing?"disabled":""}>
+                Исправить резервы по заказам
+              </button>
+            </form>
+          </div>` : `
+          <p class="muted">✓ Резервы согласованы с действующими заказами.</p>`}
+        ${renderInventory(filterStockRows(stock,products,filters),products,csrf,formAction)}
+        <p class="muted">«В корзину» скрывает позицию с рабочего склада, не стирая
+          реальные остатки и историю заказов. Для всех цветов/размеров одного
+          товара используйте «Весь товар».</p>
+      </section>
+    ` : ""}
 
-      <p class="muted">
-        Удаление требует подтверждения.
-        Если позиция находится в резерве
-        или связана с заказом, удалить её нельзя.
-      </p>
-    </section>
+    ${tab === "trash" ? `
+      <h2>Корзина товаров</h2>
+      <p class="muted">Здесь собраны позиции, удалённые из CRM вручную или
+        отсутствовавшие в Pages CMS при последней ручной синхронизации.
+        Остатки, резервы и история заказов в D1 сохранены.
+        Чтобы восстановить товар, он должен существовать в Pages CMS.</p>
+      ${renderExcluded(excluded,products,csrf,formAction)}
+    ` : ""}
 
-    ${renderExcluded(excluded, products, csrf, formAction)}
-
-    <section class="section" id="orders">
-      <div class="order-header">
-        <h3>Заказы (${orders.length})</h3>
-        <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
-      </div>
-      <p class="muted">
-        Поиск и фильтры работают по всей базе заказов.
-        Показаны до 100 последних совпадений.
-        Список статусов и товаров составляется из D1 автоматически.
-      </p>
-      ${renderOrderFilters(orderChoices, filters)}
-      <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
-      ${renderOrders(orders, csrf, formAction)}
-    </section>
+    ${tab === "orders" ? `
+      <section class="section" id="orders">
+        <div class="order-header">
+          <h2>Заказы (${orders.length})</h2>
+          <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
+        </div>
+        <p class="muted">Показаны до 100 последних совпадений.
+          Поиск и фильтры работают по всей базе заказов D1.</p>
+        ${renderOrderFilters(orderChoices,filters)}
+        <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
+        ${renderOrders(orders,csrf,formAction)}
+      </section>
+    ` : ""}
 
     <form method="POST" action="/developers">
       ${hidden("action", "logout")}
@@ -2026,6 +2036,27 @@ h3 { font-size: 19px; margin: 0 0 15px; }
   padding: 25px;
   margin: 25px 0;
 }
+.admin-tabs {
+  display:flex; flex-wrap:wrap; gap:9px; align-items:center;
+  margin:22px 0 25px; padding-bottom:14px;
+  border-bottom:1px solid #dce6ee;
+}
+.admin-tabs a {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:11px 15px; border-radius:9px;
+  border:1px solid #dce6ee;
+  background:#f5f7fa; text-decoration:none;
+  color:#435c70; font-weight:700; font-size:14px;
+}
+.admin-tabs a.active {
+  background:#102c43; color:white; border-color:#102c43;
+}
+.admin-tabs a:hover:not(.active) {background:#eaf1f6;}
+.admin-tabs .tab-count {
+  background:#dce8f0; color:#193c54; border-radius:20px;
+  padding:2px 7px; font-size:11px;
+}
+.admin-tabs .active .tab-count {background:#e4d7e9;}
 .sync-area {
   background: #f5f9fc;
   border: 1px solid #dbe8ef;
@@ -2406,6 +2437,18 @@ export async function onRequestPost(context) {
 
       case "sync":
         report = await syncCatalog(context);
+        break;
+
+      case "repair-reservations":
+        message = await repairReservations(context.env);
+        break;
+
+      case "stock-trash-product":
+        message = await trashProduct(context,form);
+        break;
+
+      case "stock-restore-product":
+        message = await restoreProduct(context,form);
         break;
 
       case "stock-bulk-save":
