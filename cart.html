@@ -776,6 +776,9 @@ function renderCart() {
 
       const details = el("div", undefined, "details");
       details.appendChild(el("h3", product.title || "Товар"));
+      if (product.design && !String(product.title || "").includes(product.design)) {
+        details.appendChild(el("p", "Дизайн: " + product.design));
+      }
 
       if (variantInfo.label) {
         details.appendChild(el("p", "Цвет: " + variantInfo.label));
