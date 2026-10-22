@@ -384,13 +384,19 @@ footer {
 <script>
 
 function catalogVariant(product) {
-  const variants=Array.isArray(product.variants)?product.variants:[];
-  return variants.find(v=>v && v.available===true) || variants[0] || null;
+  const variants=Array.isArray(product.variants)?product.variants.filter(Boolean):[];
+  const hasPhotos=v=>Array.isArray(v.photos)&&v.photos.some(Boolean);
+  return variants.find(v=>v.available===true&&hasPhotos(v)) ||
+    variants.find(v=>v.available===true) ||
+    variants.find(hasPhotos) || variants[0] || null;
 }
 function catalogPhoto(product) {
   const variant=catalogVariant(product);
-  const photos=Array.isArray(variant?.photos)?variant.photos.filter(Boolean):[];
-  return photos[0] || (Array.isArray(product.photos)?product.photos.find(Boolean):null) || null;
+  // Не подменяем фото выбранного цвета снимком из общих фото.
+  if (variant) {
+    return Array.isArray(variant.photos)?variant.photos.find(Boolean)||null:null;
+  }
+  return Array.isArray(product.photos)?product.photos.find(Boolean)||null:null;
 }
 function catalogAvailable(product) {
   const variants=Array.isArray(product.variants)?product.variants:[];
