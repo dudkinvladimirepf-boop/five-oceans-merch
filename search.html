@@ -22,24 +22,29 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
 </main>
 <footer></footer>
 <script>
-function catalogVariant(product) {
-  const variants=Array.isArray(product.variants)?product.variants.filter(Boolean):[];
-  const hasPhotos=v=>Array.isArray(v.photos)&&v.photos.some(Boolean);
-  return variants.find(v=>v.available===true&&hasPhotos(v)) ||
-    variants.find(v=>v.available===true) ||
-    variants.find(hasPhotos) || variants[0] || null;
+function catalogVariant(product, highlight = null) {
+  const variants = Array.isArray(product.variants)
+    ? product.variants.filter(v => v && /^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code || ""))
+    : [];
+  const active = variants.filter(v => v.available === true);
+  const choices = highlight
+    ? active.filter(v => v[highlight] === true)
+    : (active.length ? active : variants);
+  const hasPhoto = v => Array.isArray(v.photos) && v.photos.some(Boolean);
+  return choices.find(hasPhoto) || choices[0] || null;
 }
-function catalogPhoto(product) {
-  const variant=catalogVariant(product);
-  // Не подменяем фото выбранного цвета снимком из общих фото.
-  if (variant) {
-    return Array.isArray(variant.photos)?variant.photos.find(Boolean)||null:null;
-  }
-  return Array.isArray(product.photos)?product.photos.find(Boolean)||null:null;
+function catalogPhoto(product, highlight = null) {
+  const variant = catalogVariant(product, highlight);
+  return variant && Array.isArray(variant.photos)
+    ? variant.photos.find(Boolean) || null : null;
 }
 function catalogAvailable(product) {
-  const variants=Array.isArray(product.variants)?product.variants:[];
-  return product.available===true && (!variants.length || variants.some(v=>v?.available===true));
+  return Array.isArray(product.variants) &&
+    product.variants.some(v => v && v.available === true);
+}
+function catalogHighlighted(product, field) {
+  return Array.isArray(product.variants) &&
+    product.variants.some(v => v && v.available === true && v[field] === true);
 }
 
 (async function () {
@@ -90,11 +95,12 @@ function catalogAvailable(product) {
     const categoryNames = new Map(categories.map(c=>[normalize(c.id),c.title]));
     const visible = products.filter(p=>{
       if (!p || !p.slug) return false;
-      if (collection === "new" && (p.new_arrival !== true || !catalogAvailable(p))) return false;
-      if (collection === "featured" && (p.featured !== true || !catalogAvailable(p))) return false;
+      if (collection === "new" && !catalogHighlighted(p, "new_arrival")) return false;
+      if (collection === "featured" && !catalogHighlighted(p, "featured")) return false;
       if (!searchTerm) return true;
       const combined = [
         p.title,p.description,p.slug,
+        ...(Array.isArray(p.variants) ? p.variants.map(v => v?.label) : []),
         categoryNames.get(normalize(p.category))
       ].map(normalize).join(" ");
       return combined.includes(normalize(searchTerm));
@@ -109,8 +115,12 @@ function catalogAvailable(product) {
     for (const product of visible) {
       const card = document.createElement("a");
       card.className = "card";
-      card.href = "/product.html?slug=" + encodeURIComponent(product.slug);
-      const photo = catalogPhoto(product);
+      const highlight = collection === "new" ? "new_arrival" :
+        collection === "featured" ? "featured" : null;
+      const selectedColor = catalogVariant(product,highlight);
+      card.href = "/product.html?slug=" + encodeURIComponent(product.slug) +
+        (selectedColor ? "&color=" + encodeURIComponent(selectedColor.code) : "");
+      const photo = catalogPhoto(product,highlight);
       if (photo) {
         const img = document.createElement("img");
         img.src = photo;
