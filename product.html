@@ -595,6 +595,31 @@ async function checkStock(slug, size, quantity) {
   return data;
 }
 
+function variantStockSize(variant,size) {
+  const simple = String(size ?? "").trim();
+  return variant ? "v:" + variant.code + "|" + simple : simple;
+}
+function normalizedSizes(list) {
+  return Array.isArray(list) ? [...new Set(list.map(v=>String(v??"").trim()).filter(Boolean))] : [];
+}
+function productVariants(product) {
+  if (!Array.isArray(product.variants)) return [];
+  const found = new Set();
+  return product.variants.filter(v => {
+    if (!v || typeof v.code !== "string" ||
+        !/^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code) ||
+        !/^#[0-9a-fA-F]{6}$/.test(v.hex || "") ||
+        found.has(v.code)) return false;
+    found.add(v.code);
+    return true;
+  });
+}
+function availableSizes(product, variant) {
+  const own = normalizedSizes(variant?.sizes);
+  const main = normalizedSizes(product.sizes);
+  return own.length ? own : main;
+}
+
 /* ЗАГРУЗКА ТОВАРА */
 
 async function loadProduct() {
@@ -663,72 +688,48 @@ async function loadProduct() {
     const gallery = makeElement("div");
     const details = makeElement("div");
 
-    /* ФОТОГРАФИИ */
+    const variants = productVariants(product);
+    let selectedVariant = variants.find(v=>v.available === true) || variants[0] || null;
+    let available = product.available === true &&
+      (!variants.length || selectedVariant.available === true);
 
-    const photos = Array.isArray(product.photos)
-      ? product.photos.filter(Boolean)
-      : [];
-
-    if (photos.length) {
-
+    // Фотографии выбранного цвета. Если у цвета их пока нет, берём общие.
+    function renderGallery() {
+      gallery.replaceChildren();
+      const own = Array.isArray(selectedVariant?.photos)
+        ? selectedVariant.photos.filter(Boolean) : [];
+      const defaultPhotos = Array.isArray(product.photos)
+        ? product.photos.filter(Boolean) : [];
+      const photos = own.length ? own : defaultPhotos;
+      if (!photos.length) {
+        gallery.appendChild(makeElement("div","no-photo","Фотография пока отсутствует"));
+        return;
+      }
       const mainPhoto = document.createElement("img");
-
       mainPhoto.className = "main-photo";
       mainPhoto.src = photos[0];
       mainPhoto.alt = product.title;
-
       gallery.appendChild(mainPhoto);
-
       if (photos.length > 1) {
-
-        const thumbnails = makeElement(
-          "div",
-          "thumbnails"
-        );
-
-        photos.forEach((photo, index) => {
-
+        const thumbnails = makeElement("div","thumbnails");
+        photos.forEach((photo,index) => {
           const button = document.createElement("button");
           button.type = "button";
-
-          if (index === 0) {
-            button.classList.add("active");
-          }
-
+          if(index===0) button.classList.add("active");
           const img = document.createElement("img");
-          img.src = photo;
-          img.alt = "Фото " + (index + 1);
-
+          img.src=photo;img.alt="Фото "+(index+1);
           button.appendChild(img);
-
-          button.addEventListener("click", () => {
-
-            mainPhoto.src = photo;
-
-            thumbnails.querySelectorAll("button")
-              .forEach(b =>
-                b.classList.remove("active")
-              );
-
+          button.addEventListener("click",()=>{
+            mainPhoto.src=photo;
+            thumbnails.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
             button.classList.add("active");
           });
-
           thumbnails.appendChild(button);
         });
-
         gallery.appendChild(thumbnails);
       }
-
-    } else {
-
-      gallery.appendChild(
-        makeElement(
-          "div",
-          "no-photo",
-          "Фотография пока отсутствует"
-        )
-      );
     }
+    renderGallery();
 
     /* НАЗВАНИЕ И ОПИСАНИЕ */
 
@@ -755,8 +756,6 @@ async function loadProduct() {
     );
 
     /* НАЛИЧИЕ */
-
-    const available = product.available === true;
 
     const status = makeElement(
       "p",
