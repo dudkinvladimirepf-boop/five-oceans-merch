@@ -717,26 +717,37 @@ async function loadProduct() {
     const details = makeElement("div");
 
     const variants = productVariants(product);
-    let selectedVariant = variants.find(v=>v.available === true) || variants[0] || null;
+    // На первом экране выбираем доступный цвет с фотографиями.
+    // Если снимков нет вообще, показываем первый доступный цвет.
+    const withPhotos = v => Array.isArray(v?.photos) && v.photos.some(Boolean);
+    let selectedVariant =
+      variants.find(v => v.available === true && withPhotos(v)) ||
+      variants.find(v => v.available === true) ||
+      variants.find(withPhotos) || variants[0] || null;
     let available = product.available === true &&
       (!variants.length || selectedVariant.available === true);
 
-    // Фотографии выбранного цвета. Если у цвета их пока нет, берём общие.
+    // Каждый цвет имеет строго свою фотогалерею.
+    // Общие фотографии разрешены только товарам без вариантов.
     function renderGallery() {
       gallery.replaceChildren();
-      const own = Array.isArray(selectedVariant?.photos)
-        ? selectedVariant.photos.filter(Boolean) : [];
-      const defaultPhotos = Array.isArray(product.photos)
-        ? product.photos.filter(Boolean) : [];
-      const photos = own.length ? own : defaultPhotos;
+      const photos = selectedVariant
+        ? (Array.isArray(selectedVariant.photos) ? selectedVariant.photos.filter(Boolean) : [])
+        : (Array.isArray(product.photos) ? product.photos.filter(Boolean) : []);
       if (!photos.length) {
-        gallery.appendChild(makeElement("div","no-photo","Фотография пока отсутствует"));
+        gallery.appendChild(makeElement(
+          "div", "no-photo",
+          selectedVariant
+            ? "Фотографии этого цвета пока не загружены"
+            : "Фотография пока отсутствует"
+        ));
         return;
       }
       const mainPhoto = document.createElement("img");
       mainPhoto.className = "main-photo";
       mainPhoto.src = photos[0];
-      mainPhoto.alt = product.title;
+      mainPhoto.alt = product.title +
+        (selectedVariant ? " — " + (selectedVariant.label || selectedVariant.code) : "");
       gallery.appendChild(mainPhoto);
       if (photos.length > 1) {
         const thumbnails = makeElement("div","thumbnails");
