@@ -1496,7 +1496,7 @@ function getProductTitle(item, names) {
 /* Показать администратору нормальный цвет и размер, не меняя ключи D1. */
 function displayPositionSize(slug, size, products) {
   const key = String(size || "");
-  const match = /^v:([a-z0-9-]{1,25})\\|(.*)$/.exec(key);
+  const match = /^v:([a-z0-9-]{1,25})\|(.*)$/.exec(key);
   if (!match) return key || "Без размера";
   const product = products.find(p => p && p.slug === slug);
   const variant = Array.isArray(product?.variants)
