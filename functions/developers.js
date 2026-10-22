@@ -996,6 +996,7 @@ async function syncCatalog(context) {
     updated: 0,
     unchanged: 0,
     excluded: 0,
+    archived: 0,
     warnings: []
   };
 
@@ -1036,6 +1037,30 @@ async function syncCatalog(context) {
     for (const size of sizesOf(product)) {
       positions.push({ slug, id, size });
     }
+  }
+
+  /*
+    Pages CMS — источник состава каталога. Только по кнопке
+    архивируем в корзину позиции, которых уже нет в Pages CMS.
+    Физически inventory не удаляется: остатки и история заказов целы.
+    Отдельные исключения, созданные в CRM вручную, тоже сохраняются.
+  */
+  const wanted = new Set(positions.map(p => JSON.stringify([p.slug,p.size])));
+  const existingRows = await db.prepare(
+    "SELECT product_slug, size FROM inventory"
+  ).all();
+  for (const row of existingRows.results || []) {
+    const slug = String(row.product_slug);
+    const size = String(row.size || "");
+    if (wanted.has(JSON.stringify([slug,size]))) continue;
+
+    const archived = await db.prepare(
+      `INSERT INTO inventory_exclusions (product_slug, size, product_id)
+       SELECT product_slug, size, product_id FROM inventory
+       WHERE product_slug = ? AND size = ?
+       ON CONFLICT(product_slug,size) DO NOTHING`
+    ).bind(slug,size).run();
+    report.archived += Number(archived.meta?.changes || 0);
   }
 
   for (const item of positions) {
@@ -1345,26 +1370,6 @@ async function deletionConfirmation(
     throw new Error("Складская позиция не найдена.");
   }
 
-  if (Number(item.reserved_quantity) > 0) {
-    throw new Error(
-      "Позиция находится в резерве. " +
-      "Сначала необходимо снять резерв."
-    );
-  }
-
-  const linked = await db.prepare(
-    `SELECT order_id FROM order_items
-     WHERE product_slug = ? AND size = ?
-     LIMIT 1`
-  ).bind(slug, size).first();
-
-  if (linked) {
-    throw new Error(
-      "Позиция связана с заказом. " +
-      "Удаление запрещено для сохранения истории."
-    );
-  }
-
   const total = Number(item.total_quantity);
   const expiry = Math.floor(Date.now() / 1000) + 300;
 
@@ -1388,15 +1393,15 @@ async function deletionConfirmation(
       <p>Текущий остаток: <b>${number(total)} шт.</b></p>
 
       <p>
-        Позиция будет удалена из таблицы inventory.
-        Если остаток больше нуля, его значение будет
-        потеряно. Товар останется в Pages CMS,
-        но станет недоступным для заказа.
+        Позиция переместится в отдельную вкладку «Корзина товаров».
+        Остаток, резерв и история заказов сохранятся.
+        Новые заказы по этой позиции будут запрещены.
+        Из Pages CMS товар не удаляется.
       </p>
 
       <p>
-        Ручная синхронизация не создаст
-        эту позицию повторно.
+        Синхронизация с Pages CMS не вернёт позицию сама.
+        Восстановить её можно из корзины.
       </p>
     </div>
 
@@ -1410,7 +1415,7 @@ async function deletionConfirmation(
       ${hidden("confirm_token", token)}
 
       <button class="danger-button" type="submit">
-        Да, удалить позицию
+        Да, переместить в корзину
       </button>
     </form>
 
@@ -1454,92 +1459,83 @@ async function deleteStock(context, secret, form) {
 
   const db = database(context.env);
 
-  /*
-    Обе операции выполняются в одной транзакции:
-    1. Запоминаем исключение.
-    2. Удаляем запись из inventory.
+  // Мягкое удаление: оставляем inventory и все связи с заказами.
+  // INSERT...SELECT фиксирует актуальный product_id в существующей таблице корзины.
+  const result = await db.prepare(
+    `INSERT INTO inventory_exclusions (product_slug, size, product_id)
+     SELECT product_slug, size, product_id
+     FROM inventory
+     WHERE product_slug = ? AND size = ? AND total_quantity = ?
+     ON CONFLICT(product_slug,size) DO NOTHING`
+  ).bind(slug,size,total).run();
 
-    Проверки резервов, количества и заказов
-    выполняются непосредственно в SQL.
-  */
-
-  const statements = [
-    db.prepare(
-      `INSERT INTO inventory_exclusions (
-         product_slug, size, product_id
-       )
-       SELECT product_slug, size, product_id
-       FROM inventory
-       WHERE product_slug = ?
-         AND size = ?
-         AND total_quantity = ?
-         AND reserved_quantity = 0
-         AND NOT EXISTS (
-           SELECT 1 FROM order_items AS oi
-           WHERE oi.product_slug = inventory.product_slug
-             AND oi.size = inventory.size
-         )
-       ON CONFLICT(product_slug, size)
-       DO UPDATE SET
-         product_id = excluded.product_id,
-         deleted_at = CURRENT_TIMESTAMP`
-    ).bind(slug, size, total),
-
-    db.prepare(
-      `DELETE FROM inventory
-       WHERE product_slug = ?
-         AND size = ?
-         AND total_quantity = ?
-         AND reserved_quantity = 0
-         AND EXISTS (
-           SELECT 1 FROM inventory_exclusions AS ex
-           WHERE ex.product_slug = inventory.product_slug
-             AND ex.size = inventory.size
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM order_items AS oi
-           WHERE oi.product_slug = inventory.product_slug
-             AND oi.size = inventory.size
-         )`
-    ).bind(slug, size, total)
-  ];
-
-  const results = await db.batch(statements);
-
-  if (
-    results[0]?.meta?.changes !== 1 ||
-    results[1]?.meta?.changes !== 1
-  ) {
-    throw new Error(
-      "Удаление не выполнено. " +
-      "Возможно, остаток или резерв изменился. " +
-      "Обнови страницу."
-    );
+  if (Number(result.meta?.changes || 0) !== 1) {
+    throw new Error("Позиция уже в корзине либо её остаток изменился. Обнови страницу.");
   }
 
-  return "Удалена позиция: " + slug +
-    " / " + (size || "Без размера") + ".";
+  return "Позиция перемещена в корзину: " +
+    slug + " / " + (size || "Без размера") + ".";
 }
 
 /* ВОССТАНОВЛЕНИЕ ИСКЛЮЧЕНИЯ */
 
 async function restoreStock(context, form) {
   const { slug, size } = parsePosition(form);
-
-  const result = await database(context.env).prepare(
-    `DELETE FROM inventory_exclusions
-     WHERE product_slug = ? AND size = ?`
-  ).bind(slug, size).run();
-
-  if (result.meta?.changes !== 1) {
-    throw new Error("Исключение уже отсутствует.");
+  const products = await productsFromCMS(context);
+  const product = products.find(p => String(p?.slug || "") === slug);
+  if (!product || !sizesOf(product).includes(size)) {
+    throw new Error("В Pages CMS этого товара или варианта уже нет. " +
+      "Сначала восстанови его в Pages CMS, затем повтори операцию.");
   }
-
-  return (
-    "Исключение снято. Нажми «Синхронизировать " +
-    "с Pages CMS», чтобы создать позицию с остатком 0."
-  );
+  const db = database(context.env);
+  const result = await db.prepare(
+    "DELETE FROM inventory_exclusions WHERE product_slug = ? AND size = ?"
+  ).bind(slug, size).run();
+  if (Number(result.meta?.changes || 0) !== 1) {
+    throw new Error("Позиция уже восстановлена.");
+  }
+  const exists = await db.prepare(
+    "SELECT 1 FROM inventory WHERE product_slug = ? AND size = ?"
+  ).bind(slug,size).first();
+  return exists
+    ? "Позиция возвращена на рабочий склад (остатки сохранены)."
+    : "Позиция восстановлена. Нажми «Синхронизировать с Pages CMS», чтобы создать её с нулевым остатком.";
 }
+
+async function trashProduct(context, form) {
+  const slug = String(form.get("product_slug") || "").trim();
+  if (!slug || slug.length > 300) throw new Error("Некорректный товар.");
+  const db = database(context.env);
+  const result = await db.prepare(
+    `INSERT INTO inventory_exclusions (product_slug, size, product_id)
+     SELECT product_slug, size, product_id FROM inventory
+     WHERE product_slug = ?
+     ON CONFLICT(product_slug,size) DO NOTHING`
+  ).bind(slug).run();
+  const count = Number(result.meta?.changes || 0);
+  if (!count) throw new Error("Товар уже в корзине или не найден на складе.");
+  return "Товар «" + slug + "» перемещён в корзину. Позиций: " + count +
+    ". Остатки и заказы сохранены.";
+}
+
+async function restoreProduct(context, form) {
+  const slug = String(form.get("product_slug") || "").trim();
+  if (!slug || slug.length > 300) throw new Error("Некорректный товар.");
+  const products = await productsFromCMS(context);
+  const product = products.find(p => String(p?.slug || "") === slug);
+  if (!product) throw new Error("Сначала верни товар в Pages CMS.");
+  const allowedSizes = sizesOf(product);
+  const db = database(context.env);
+  const removed = await db.prepare(
+    `DELETE FROM inventory_exclusions
+     WHERE product_slug = ?
+       AND size IN (SELECT value FROM json_each(?))`
+  ).bind(slug,JSON.stringify(allowedSizes)).run();
+  return "Товар восстановлен из корзины. Позиций: " +
+    Number(removed.meta?.changes || 0) +
+    ". Если некоторые позиции были удалены ранее, нажми кнопку синхронизации.";
+}
+
 
 /* ОТОБРАЖЕНИЕ ДАННЫХ */
 
