@@ -46,6 +46,11 @@ export async function onRequestGet({ request, env }) {
        FROM inventory
        WHERE product_slug = ?
          AND size = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM inventory_exclusions AS e
+           WHERE e.product_slug = inventory.product_slug
+             AND e.size = inventory.size
+         )
        LIMIT 1`
     ).bind(slug, size).first();
 
