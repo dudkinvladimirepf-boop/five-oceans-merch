@@ -1017,11 +1017,11 @@ async function syncCatalog(context) {
     const title = String(product?.title || slug);
 
     if (!slug || !uuidPattern.test(id)) {
-      report.warnings.push(
-        "Пропущен товар «" + title +
-        "»: отсутствует slug или product_id."
+      // Каталог неполон или повреждён: НЕ архивируем рабочие товары.
+      throw new Error(
+        "Синхронизация остановлена: у товара «" + title +
+        "» отсутствует корректный slug или product_id."
       );
-      continue;
     }
 
     if (
