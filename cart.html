@@ -468,7 +468,7 @@ function cartVariantInfo(product,rawSize) {
     return {valid:sizes.length?sizes.includes(value):value==="",
       label:"",size:value,photos:product.photos};
   }
-  const parsed=/^v:([a-z0-9-]{1,25})\\|(.*)$/.exec(value);
+  const parsed=/^v:([a-z0-9-]{1,25})\|(.*)$/.exec(value);
   const variant=parsed && variants.find(v=>v && v.code===parsed[1]);
   if(!variant) return {valid:false,label:"",size:value,photos:[]};
   const general=Array.isArray(product.sizes)?product.sizes.map(String).filter(Boolean):[];
@@ -580,7 +580,7 @@ function composeOrderText(items, number) {
       if(info.size) lines.push("Размер: " + info.size);
     } else if(item.size) {
       // После создания заказа товар уже мог исчезнуть из каталога.
-      const match=/^v:[a-z0-9-]{1,25}\\|(.*)$/.exec(String(item.size));
+      const match=/^v:[a-z0-9-]{1,25}\|(.*)$/.exec(String(item.size));
       if(match?.[1]) lines.push("Размер: "+match[1]);
       else if(!match) lines.push("Размер: " + item.size);
     }
