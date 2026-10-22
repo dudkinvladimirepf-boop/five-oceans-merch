@@ -238,9 +238,8 @@ function sizesOf(product) {
   const standard = values => Array.isArray(values)
     ? [...new Set(values.map(x => String(x ?? "").trim()).filter(Boolean))]
     : [];
-  const base = standard(product.sizes);
   const variants = Array.isArray(product.variants) ? product.variants : [];
-  if (!variants.length) return base.length ? base : [""];
+  if (!variants.length) return [];
   const result = [];
   const codes = new Set();
   for (const variant of variants) {
@@ -249,8 +248,7 @@ function sizesOf(product) {
       throw new Error("Неверный или повторяющийся код цвета: " + code);
     }
     codes.add(code);
-    const custom = standard(variant.sizes);
-    const sizes = custom.length ? custom : (base.length ? base : [""]);
+    const sizes = standard(variant.sizes);
     for (const size of sizes) {
       const key = "v:" + code + "|" + size;
       if (key.length > 100) throw new Error("Слишком длинная комбинация цвета и размера");
