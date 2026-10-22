@@ -1493,6 +1493,19 @@ function getProductTitle(item, names) {
     || item.product_slug;
 }
 
+/* Показать администратору нормальный цвет и размер, не меняя ключи D1. */
+function displayPositionSize(slug, size, products) {
+  const key = String(size || "");
+  const match = /^v:([a-z0-9-]{1,25})\\|(.*)$/.exec(key);
+  if (!match) return key || "Без размера";
+  const product = products.find(p => p && p.slug === slug);
+  const variant = Array.isArray(product?.variants)
+    ? product.variants.find(v => v && v.code === match[1])
+    : null;
+  const label = String(variant?.label || match[1]);
+  return label + (match[2] ? " / " + match[2] : "");
+}
+
 function renderInventory(rows, products, csrf, formAction = "/developers") {
   if (!rows.length) {
     return `<p class="muted">По выбранным условиям складских позиций не найдено.</p>`;
@@ -1502,6 +1515,7 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
   const body = rows.map(item => {
     const slug = String(item.product_slug);
     const size = String(item.size || "");
+    const sizeLabel = displayPositionSize(slug,size,products);
     const title = getProductTitle(item, names);
     const total = Number(item.total_quantity);
 
@@ -1512,7 +1526,7 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
           <small>${esc(slug)}</small>
         </td>
 
-        <td>${esc(size || "Без размера")}</td>
+        <td>${esc(sizeLabel)}</td>
         <td class="num">${number(item.reserved_quantity)}</td>
         <td class="num green">${number(item.available_quantity)}</td>
         <td>
@@ -1524,7 +1538,7 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
                  name="stock_quantity"
                  min="0" max="${MAX_STOCK}" step="1"
                  value="${total}" required
-                 aria-label="На складе: ${esc(title)}, ${esc(size || "Без размера")}">
+                 aria-label="На складе: ${esc(title)}, ${esc(sizeLabel)}">
         </td>
         <td>
           <form method="POST" action="${esc(formAction)}">
@@ -1585,7 +1599,7 @@ function renderExcluded(rows, products, csrf, formAction = "/developers") {
         <strong>${esc(getProductTitle(item, names))}</strong>
         <small>${esc(item.product_slug)}</small>
       </td>
-      <td>${esc(item.size || "Без размера")}</td>
+      <td>${esc(displayPositionSize(item.product_slug,item.size,products))}</td>
       <td>
         <form method="POST" action="${esc(formAction)}">
           ${hidden("action", "stock-restore")}
