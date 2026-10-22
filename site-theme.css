@@ -612,3 +612,44 @@ body:not(.home-page) .category-promo { color:var(--muted); }
 @media (max-width:650px) {
   .site-footer .social-popup { width:210px; }
 }
+
+/* Цветовые варианты: в карточке только цветные кружки, без надписей. */
+.color-swatches {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:13px;
+  margin:16px 0 24px;
+}
+.color-swatch {
+  appearance:none;
+  position:relative;
+  width:33px;
+  height:33px;
+  padding:0;
+  flex:none;
+  border:2px solid white;
+  border-radius:50%;
+  background:var(--swatch-color, #777);
+  box-shadow:0 0 0 1px #a2aebd;
+  cursor:pointer;
+  transition:transform .15s,box-shadow .15s;
+}
+.color-swatch:hover {transform:scale(1.08);}
+.color-swatch.selected {
+  box-shadow:0 0 0 2px white,0 0 0 4px #c00c79;
+}
+.color-swatch.unavailable::after {
+  content:"";
+  position:absolute;
+  top:50%;left:12%;width:76%;height:2px;
+  background:#fff;
+  border-top:1px solid #314052;
+  box-shadow:0 0 0 1px rgba(0,0,0,.3);
+  transform:rotate(-45deg);
+}
+.color-swatch:focus-visible {outline:3px solid #c00c79;outline-offset:5px;}
+@media(max-width:650px) {
+  .color-swatches {gap:15px;}
+  .color-swatch {width:35px;height:35px;}
+}
