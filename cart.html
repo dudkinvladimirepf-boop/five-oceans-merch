@@ -463,20 +463,14 @@ function saveCart() {
 function cartVariantInfo(product,rawSize) {
   const value=String(rawSize||"");
   const variants=Array.isArray(product.variants)?product.variants:[];
-  if(!variants.length) {
-    const sizes=Array.isArray(product.sizes)?product.sizes.map(String).filter(Boolean):[];
-    return {valid:sizes.length?sizes.includes(value):value==="",
-      label:"",size:value,photos:product.photos};
-  }
+  if(!variants.length) return {valid:false,label:"",size:value,photos:[]};
   const parsed=/^v:([a-z0-9-]{1,25})\|(.*)$/.exec(value);
   const variant=parsed && variants.find(v=>v && v.code===parsed[1]);
   if(!variant) return {valid:false,label:"",size:value,photos:[]};
-  const general=Array.isArray(product.sizes)?product.sizes.map(String).filter(Boolean):[];
-  const specific=Array.isArray(variant.sizes)?variant.sizes.map(String).filter(Boolean):[];
-  const allowed=specific.length?specific:general;
+  const allowed=Array.isArray(variant.sizes)
+    ? variant.sizes.map(String).filter(Boolean) : [];
   const actual=parsed[2];
-  const valid=variant.available===true &&
-    (allowed.length?allowed.includes(actual):actual==="");
+  const valid=variant.available===true && allowed.includes(actual);
   // Снимки конкретного цвета не подменяются общими фото товара.
   return {valid,label:String(variant.label||variant.code),size:actual,
     photos:Array.isArray(variant.photos)?variant.photos:[]};
@@ -790,7 +784,7 @@ function renderCart() {
         details.appendChild(el("p", "Размер: " + variantInfo.size));
       }
 
-      const available = product.available === true && variantInfo.valid;
+      const available = variantInfo.valid;
 
       const price = Number(product.price);
       const priceValid =
