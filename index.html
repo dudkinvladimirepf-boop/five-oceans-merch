@@ -383,6 +383,20 @@ footer {
 
 <script>
 
+function catalogVariant(product) {
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  return variants.find(v=>v && v.available===true) || variants[0] || null;
+}
+function catalogPhoto(product) {
+  const variant=catalogVariant(product);
+  const photos=Array.isArray(variant?.photos)?variant.photos.filter(Boolean):[];
+  return photos[0] || (Array.isArray(product.photos)?product.photos.find(Boolean):null) || null;
+}
+function catalogAvailable(product) {
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  return product.available===true && (!variants.length || variants.some(v=>v?.available===true));
+}
+
 /* ОБЩИЕ ФУНКЦИИ */
 
 function makeElement(tag, className, text) {
@@ -455,13 +469,10 @@ function createCategoryCard(category, products) {
 
   const cover = makeElement("div", "category-cover");
 
-  const exampleProduct = matching.find(p =>
-    Array.isArray(p.photos) &&
-    p.photos.length > 0
-  );
+  const exampleProduct = matching.find(p => catalogPhoto(p));
 
   const photo =
-    category.image || exampleProduct?.photos?.[0];
+    category.image || (exampleProduct ? catalogPhoto(exampleProduct) : null);
 
   if (photo) {
     const img = document.createElement("img");
@@ -531,9 +542,7 @@ function createProductCard(product, categories) {
 
   const cover = makeElement("div", "category-cover");
 
-  const photos = Array.isArray(product.photos)
-    ? product.photos.filter(Boolean)
-    : [];
+  const photos = catalogPhoto(product) ? [catalogPhoto(product)] : [];
 
   if (photos.length) {
     const img = document.createElement("img");
@@ -658,14 +667,14 @@ async function loadHomepage() {
 
     const newProducts = products.filter(p =>
       p.new_arrival === true &&
-      p.available === true
+      catalogAvailable(p)
     );
 
     /* 3. ОТБИРАЕМ НАШ ВЫБОР */
 
     const featuredProducts = products.filter(p =>
       p.featured === true &&
-      p.available === true
+      catalogAvailable(p)
     );
 
     /* 4. СОЗДАЁМ БЛОКИ В НУЖНОМ ПОРЯДКЕ */

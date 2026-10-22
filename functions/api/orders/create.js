@@ -154,13 +154,40 @@ async function loadCatalog(env, request) {
 }
 
 function productSizes(product) {
-  const sizes = Array.isArray(product.sizes)
-    ? product.sizes
-        .map(value => String(value ?? "").trim())
-        .filter(Boolean)
+  const list = values => Array.isArray(values)
+    ? [...new Set(values.map(value => String(value ?? "").trim()).filter(Boolean))]
     : [];
+  const base = list(product.sizes);
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  if (!variants.length) return base.length ? base : [""];
+  const allowed = [];
+  const codes = new Set();
+  for (const variant of variants) {
+    const code = String(variant?.code || "").trim();
+    if (!/^[a-z0-9][a-z0-9-]{0,24}$/.test(code) || codes.has(code)) {
+      throw new Error("Неверная конфигурация цвета товара.");
+    }
+    codes.add(code);
+    if (variant.available !== true) continue;
+    const custom = list(variant.sizes);
+    const sizes = custom.length ? custom : (base.length ? base : [""]);
+    for (const size of sizes) {
+      const key = "v:" + code + "|" + size;
+      if (key.length > 100) throw new Error("Слишком длинная комбинация цвета и размера.");
+      allowed.push(key);
+    }
+  }
+  return allowed;
+}
 
-  return sizes.length ? sizes : [""];
+function productVariantTitle(product, stockSize) {
+  const match = /^v:([a-z0-9-]{1,25})\|/.exec(stockSize);
+  const variant = match && Array.isArray(product.variants)
+    ? product.variants.find(v => v && v.code === match[1])
+    : null;
+  return variant ? String(product.title || product.slug) +
+    " — " + String(variant.label || variant.code) :
+    String(product.title || product.slug);
 }
 
 function productPrice(product) {
@@ -420,9 +447,7 @@ export async function onRequestPost({ request, env }) {
         product_id: String(
           product.product_id || ""
         ),
-        title: String(
-          product.title || requested.slug
-        ),
+        title: productVariantTitle(product, requested.size),
         size: requested.size,
         quantity: requested.quantity,
         unit_price: unitPrice,

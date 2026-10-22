@@ -459,6 +459,29 @@ function saveCart() {
   }
 }
 
+/* Расшифровываем цвет и размер из стабильного ключа D1 v:color|size. */
+function cartVariantInfo(product,rawSize) {
+  const value=String(rawSize||"");
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  if(!variants.length) {
+    const sizes=Array.isArray(product.sizes)?product.sizes.map(String).filter(Boolean):[];
+    return {valid:sizes.length?sizes.includes(value):value==="",
+      label:"",size:value,photos:product.photos};
+  }
+  const parsed=/^v:([a-z0-9-]{1,25})\|(.*)$/.exec(value);
+  const variant=parsed && variants.find(v=>v && v.code===parsed[1]);
+  if(!variant) return {valid:false,label:"",size:value,photos:[]};
+  const general=Array.isArray(product.sizes)?product.sizes.map(String).filter(Boolean):[];
+  const specific=Array.isArray(variant.sizes)?variant.sizes.map(String).filter(Boolean):[];
+  const allowed=specific.length?specific:general;
+  const actual=parsed[2];
+  const valid=variant.available===true &&
+    (allowed.length?allowed.includes(actual):actual==="");
+  return {valid,label:String(variant.label||variant.code),size:actual,
+    photos:Array.isArray(variant.photos)&&variant.photos.some(Boolean)
+      ?variant.photos:product.photos};
+}
+
 /*
   Фиксируем состав корзины. Если количество или размер
   изменились, следующее оформление получит новый ключ.
@@ -550,8 +573,16 @@ function composeOrderText(items, number) {
 
     lines.push(String(index + 1) + ". " + item.title);
 
-    if (item.size) {
-      lines.push("Размер: " + item.size);
+    const product = products.find(p=>p.slug===item.slug);
+    if (product) {
+      const info=cartVariantInfo(product,item.size);
+      if(info.label) lines.push("Цвет: " + info.label);
+      if(info.size) lines.push("Размер: " + info.size);
+    } else if(item.size) {
+      // После создания заказа товар уже мог исчезнуть из каталога.
+      const match=/^v:[a-z0-9-]{1,25}\|(.*)$/.exec(String(item.size));
+      if(match?.[1]) lines.push("Размер: "+match[1]);
+      else if(!match) lines.push("Размер: " + item.size);
     }
 
     lines.push("Количество: " + quantity + " шт.");
@@ -739,7 +770,8 @@ function renderCart() {
       row.appendChild(el("p", "Товар больше не найден в каталоге."));
       hasUnavailable = true;
     } else {
-      const photo = product.photos?.[0];
+      const variantInfo = cartVariantInfo(product,item.size);
+      const photo = Array.isArray(variantInfo.photos) ? variantInfo.photos.find(Boolean) : null;
 
       if (photo) {
         const img = document.createElement("img");
@@ -751,20 +783,14 @@ function renderCart() {
       const details = el("div", undefined, "details");
       details.appendChild(el("h3", product.title || "Товар"));
 
-      if (item.size) {
-        details.appendChild(el("p", "Размер: " + item.size));
+      if (variantInfo.label) {
+        details.appendChild(el("p", "Цвет: " + variantInfo.label));
+      }
+      if (variantInfo.size) {
+        details.appendChild(el("p", "Размер: " + variantInfo.size));
       }
 
-      const sizes = Array.isArray(product.sizes)
-        ? product.sizes.map(String).filter(Boolean)
-        : [];
-
-      // Размер должен точно соответствовать каталогу.
-      const sizeValid = sizes.length
-        ? sizes.includes(String(item.size || ""))
-        : !String(item.size || "");
-
-      const available = product.available === true && sizeValid;
+      const available = product.available === true && variantInfo.valid;
 
       const price = Number(product.price);
       const priceValid =

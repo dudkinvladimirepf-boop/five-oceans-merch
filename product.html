@@ -188,6 +188,34 @@ h1 {
   opacity: .5;
   cursor: not-allowed;
 }
+/* Варианты цвета — только цветовые кружки, без надписей. */
+.color-swatches {
+  display:flex; flex-wrap:wrap; align-items:center; gap:12px;
+  margin:8px 0 23px;
+}
+.color-swatch {
+  width:32px; height:32px; border-radius:50%; padding:0;
+  border:2px solid #fff;
+  background:var(--swatch-color,#bbb);
+  box-shadow:0 0 0 1px #bdc9d3;
+  cursor:pointer; position:relative; flex:none;
+}
+.color-swatch.selected {
+  box-shadow:0 0 0 2px #c00c79,0 0 0 4px #fff;
+}
+.color-swatch.unavailable {
+  opacity:.4;
+}
+.color-swatch.unavailable::after {
+  content:""; position:absolute; width:44px; height:1px;
+  background:#24384b; left:50%; top:50%;
+  transform:translate(-50%,-50%) rotate(-45deg);
+  pointer-events:none;
+}
+.color-swatch:focus-visible {
+  outline:2px solid #c00c79; outline-offset:5px;
+}
+
 
 /* ПОКУПКА */
 
@@ -595,6 +623,31 @@ async function checkStock(slug, size, quantity) {
   return data;
 }
 
+function variantStockSize(variant,size) {
+  const simple = String(size ?? "").trim();
+  return variant ? "v:" + variant.code + "|" + simple : simple;
+}
+function normalizedSizes(list) {
+  return Array.isArray(list) ? [...new Set(list.map(v=>String(v??"").trim()).filter(Boolean))] : [];
+}
+function productVariants(product) {
+  if (!Array.isArray(product.variants)) return [];
+  const found = new Set();
+  return product.variants.filter(v => {
+    if (!v || typeof v.code !== "string" ||
+        !/^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code) ||
+        !/^#[0-9a-fA-F]{6}$/.test(v.hex || "") ||
+        found.has(v.code)) return false;
+    found.add(v.code);
+    return true;
+  });
+}
+function availableSizes(product, variant) {
+  const own = normalizedSizes(variant?.sizes);
+  const main = normalizedSizes(product.sizes);
+  return own.length ? own : main;
+}
+
 /* ЗАГРУЗКА ТОВАРА */
 
 async function loadProduct() {
@@ -663,72 +716,48 @@ async function loadProduct() {
     const gallery = makeElement("div");
     const details = makeElement("div");
 
-    /* ФОТОГРАФИИ */
+    const variants = productVariants(product);
+    let selectedVariant = variants.find(v=>v.available === true) || variants[0] || null;
+    let available = product.available === true &&
+      (!variants.length || selectedVariant.available === true);
 
-    const photos = Array.isArray(product.photos)
-      ? product.photos.filter(Boolean)
-      : [];
-
-    if (photos.length) {
-
+    // Фотографии выбранного цвета. Если у цвета их пока нет, берём общие.
+    function renderGallery() {
+      gallery.replaceChildren();
+      const own = Array.isArray(selectedVariant?.photos)
+        ? selectedVariant.photos.filter(Boolean) : [];
+      const defaultPhotos = Array.isArray(product.photos)
+        ? product.photos.filter(Boolean) : [];
+      const photos = own.length ? own : defaultPhotos;
+      if (!photos.length) {
+        gallery.appendChild(makeElement("div","no-photo","Фотография пока отсутствует"));
+        return;
+      }
       const mainPhoto = document.createElement("img");
-
       mainPhoto.className = "main-photo";
       mainPhoto.src = photos[0];
       mainPhoto.alt = product.title;
-
       gallery.appendChild(mainPhoto);
-
       if (photos.length > 1) {
-
-        const thumbnails = makeElement(
-          "div",
-          "thumbnails"
-        );
-
-        photos.forEach((photo, index) => {
-
+        const thumbnails = makeElement("div","thumbnails");
+        photos.forEach((photo,index) => {
           const button = document.createElement("button");
           button.type = "button";
-
-          if (index === 0) {
-            button.classList.add("active");
-          }
-
+          if(index===0) button.classList.add("active");
           const img = document.createElement("img");
-          img.src = photo;
-          img.alt = "Фото " + (index + 1);
-
+          img.src=photo;img.alt="Фото "+(index+1);
           button.appendChild(img);
-
-          button.addEventListener("click", () => {
-
-            mainPhoto.src = photo;
-
-            thumbnails.querySelectorAll("button")
-              .forEach(b =>
-                b.classList.remove("active")
-              );
-
+          button.addEventListener("click",()=>{
+            mainPhoto.src=photo;
+            thumbnails.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
             button.classList.add("active");
           });
-
           thumbnails.appendChild(button);
         });
-
         gallery.appendChild(thumbnails);
       }
-
-    } else {
-
-      gallery.appendChild(
-        makeElement(
-          "div",
-          "no-photo",
-          "Фотография пока отсутствует"
-        )
-      );
     }
+    renderGallery();
 
     /* НАЗВАНИЕ И ОПИСАНИЕ */
 
@@ -756,8 +785,6 @@ async function loadProduct() {
 
     /* НАЛИЧИЕ */
 
-    const available = product.available === true;
-
     const status = makeElement(
       "p",
       available ? "status" : "status off",
@@ -766,35 +793,67 @@ async function loadProduct() {
 
     details.appendChild(status);
 
+    /* Кружки без текстовых подписей. Названия — в aria-label и подсказках. */
+    if (variants.length) {
+      const row = makeElement("div","color-swatches");
+      row.setAttribute("role","group");
+      row.setAttribute("aria-label","Выбор цвета");
+      const buttons = new Map();
+
+      function updateColorButtons() {
+        buttons.forEach((button,code)=>{
+          const selected = selectedVariant?.code === code;
+          button.classList.toggle("selected",selected);
+          button.setAttribute("aria-pressed",String(selected));
+        });
+      }
+
+      for (const variant of variants) {
+        const button = document.createElement("button");
+        button.type="button";
+        button.className="color-swatch";
+        button.style.setProperty("--swatch-color", variant.hex);
+        button.setAttribute("aria-label",variant.label || variant.code);
+        button.title = (variant.label || variant.code) +
+          (variant.available === true ? "" : " — нет в наличии");
+        if (variant.available !== true) button.classList.add("unavailable");
+        button.addEventListener("click",()=>{
+          if (busy) return;
+          selectedVariant = variant;
+          available = product.available === true && variant.available === true;
+          sizes = availableSizes(product,variant);
+          selectedSize = sizes[0] || null;
+          pendingQuantity = 1;
+          message.textContent = "";
+          renderGallery();
+          buildSizeButtons();
+          updateColorButtons();
+          renderPurchase();
+          refreshStockState();
+        });
+        buttons.set(variant.code,button);
+        row.appendChild(button);
+      }
+
+      updateColorButtons();
+      details.appendChild(row);
+    }
+
     /* РАЗМЕРЫ */
 
-    const sizes = Array.isArray(product.sizes)
-      ? [
-          ...new Set(
-            product.sizes
-              .map(normalizeSize)
-              .filter(Boolean)
-          )
-        ]
-      : [];
-
+    let sizes = availableSizes(product,selectedVariant);
     const savedCart = safelyReadCart();
-
-    let selectedSize = null;
-
+    let selectedSize = sizes[0] || null;
     if (sizes.length) {
-
-      const previousItem = [...savedCart]
-        .reverse()
-        .find(item =>
-          item.slug === product.slug &&
-          sizes.includes(normalizeSize(item.size)) &&
-          validQuantity(item.quantity) > 0
-        );
-
-      selectedSize = previousItem
-        ? normalizeSize(previousItem.size)
-        : sizes[0];
+      const previous = [...savedCart].reverse().find(item =>
+        item.slug === product.slug && validQuantity(item.quantity) > 0 &&
+        sizes.some(size => item.size === variantStockSize(selectedVariant,size))
+      );
+      if (previous) {
+        selectedSize = sizes.find(size=>
+          variantStockSize(selectedVariant,size) === previous.size
+        ) || sizes[0];
+      }
     }
 
     let pendingQuantity = 1;
@@ -816,46 +875,33 @@ async function loadProduct() {
     let stockRequestId = 0;
     let busy = false;
 
-    if (sizes.length) {
+    const sizeHeading = makeElement("h3","size-heading","Размер");
+    const sizesRow = makeElement("div","sizes");
+    details.append(sizeHeading,sizesRow);
 
-      details.appendChild(
-        makeElement("h3", "size-heading", "Размер")
-      );
-
-      const sizesRow = makeElement("div", "sizes");
-
+    function buildSizeButtons() {
+      sizeButtons.clear();
+      sizesRow.replaceChildren();
+      sizeHeading.hidden = !sizes.length;
+      sizesRow.hidden = !sizes.length;
       sizes.forEach(size => {
-
-        const button = makeElement(
-          "button",
-          "size",
-          size
-        );
-
-        button.type = "button";
+        const button = makeElement("button","size",size);
+        button.type="button";
         button.disabled = !available;
-
-        button.addEventListener("click", () => {
-
+        button.addEventListener("click",()=>{
           if (busy) return;
-
           selectedSize = size;
           pendingQuantity = 1;
-
           message.textContent = "";
-
           renderSizes();
           renderPurchase();
           refreshStockState();
-
         });
-
-        sizeButtons.set(size, button);
+        sizeButtons.set(size,button);
         sizesRow.appendChild(button);
       });
-
-      details.appendChild(sizesRow);
     }
+    buildSizeButtons();
 
     function renderSizes() {
       sizeButtons.forEach((button, size) => {
@@ -1013,7 +1059,7 @@ async function loadProduct() {
       return cartQuantity(
         safelyReadCart(),
         product.slug,
-        selectedSize
+        variantStockSize(selectedVariant,selectedSize)
       );
     }
 
@@ -1128,7 +1174,7 @@ async function loadProduct() {
 
         const result = await checkStock(
           product.slug,
-          size,
+          variantStockSize(selectedVariant,size),
           1
         );
 
@@ -1180,7 +1226,7 @@ async function loadProduct() {
 
       const result = await checkStock(
         product.slug,
-        size,
+        variantStockSize(selectedVariant,size),
         quantity
       );
 
@@ -1236,7 +1282,7 @@ async function loadProduct() {
         const newCart = setItemQuantity(
           cart,
           product.slug,
-          size,
+          variantStockSize(selectedVariant,size),
           newQuantity
         );
 

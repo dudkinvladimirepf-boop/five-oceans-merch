@@ -374,6 +374,20 @@ function formatPrice(price) {
   }).format(Number(price));
 }
 
+function catalogVariant(product) {
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  return variants.find(v=>v && v.available===true) || variants[0] || null;
+}
+function catalogPhoto(product) {
+  const variant=catalogVariant(product);
+  const photos=Array.isArray(variant?.photos)?variant.photos.filter(Boolean):[];
+  return photos[0] || (Array.isArray(product.photos)?product.photos.find(Boolean):null) || null;
+}
+function catalogAvailable(product) {
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  return product.available===true && (!variants.length || variants.some(v=>v?.available===true));
+}
+
 /* СОЗДАНИЕ КАРТОЧКИ ТОВАРА */
 
 function createProductCard(product) {
@@ -394,9 +408,7 @@ function createProductCard(product) {
 
   /* Фотографии */
 
-  const photos = Array.isArray(product.photos)
-    ? product.photos.filter(Boolean)
-    : [];
+  const photos = catalogPhoto(product) ? [catalogPhoto(product)] : [];
 
   if (photos.length > 0) {
 
@@ -455,7 +467,7 @@ function createProductCard(product) {
 
   /* Наличие */
 
-  const available = product.available === true;
+  const available = catalogAvailable(product);
 
   info.appendChild(
     createElement(
@@ -467,9 +479,10 @@ function createProductCard(product) {
 
   /* Размеры */
 
-  const sizes = Array.isArray(product.sizes)
-    ? product.sizes.filter(Boolean)
-    : [];
+  const selected = catalogVariant(product);
+  const sizes = Array.isArray(selected?.sizes) && selected.sizes.some(Boolean)
+    ? selected.sizes.filter(Boolean)
+    : (Array.isArray(product.sizes) ? product.sizes.filter(Boolean) : []);
 
   if (available && sizes.length > 0) {
 

@@ -74,6 +74,48 @@ content:
         type: string
         list: true
 
+      - name: variants
+        label: Цвета и фотографии (варианты товара)
+        type: object
+        description: Одна карточка на дизайн. Добавляйте и удаляйте цвета здесь. Если цветов нет, действует прежняя карточка.
+        list:
+          collapsible:
+            collapsed: true
+            summary: "{label} — {code}"
+        fields:
+          - name: code
+            label: Код цвета
+            type: string
+            required: true
+            pattern: "^[a-z0-9][a-z0-9-]{0,24}$"
+            description: Уникальный код латиницей (black, red). После продажи не переименовывайте, чтобы сохранялась связь с заказами и D1.
+          - name: label
+            label: Название цвета (для заказов)
+            type: string
+            required: true
+            description: Покупатель видит только кружок, название нужно для заказов и подсказок.
+          - name: hex
+            label: Цвет кружка
+            type: string
+            required: true
+            pattern: "^#[0-9A-Fa-f]{6}$"
+            description: HEX цвет, например #161616 для чёрного, #C62828 для красного.
+          - name: available
+            label: Цвет доступен для заказа
+            type: boolean
+            description: Выключите для цвета, которого сейчас нет. Это не меняет численные складские остатки.
+          - name: photos
+            label: Фотографии этого цвета
+            type: image
+            options:
+              multiple:
+                max: 6
+          - name: sizes
+            label: Размеры этого цвета
+            type: string
+            list: true
+            description: Если пусто, используются общие размеры товара выше. Только реальные размеры без количества.
+
       - name: available
         label: В наличии
         type: boolean
