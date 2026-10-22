@@ -238,9 +238,8 @@ function sizesOf(product) {
   const standard = values => Array.isArray(values)
     ? [...new Set(values.map(x => String(x ?? "").trim()).filter(Boolean))]
     : [];
-  const base = standard(product.sizes);
   const variants = Array.isArray(product.variants) ? product.variants : [];
-  if (!variants.length) return base.length ? base : [""];
+  if (!variants.length) return [];
   const result = [];
   const codes = new Set();
   for (const variant of variants) {
@@ -249,8 +248,7 @@ function sizesOf(product) {
       throw new Error("Неверный или повторяющийся код цвета: " + code);
     }
     codes.add(code);
-    const custom = standard(variant.sizes);
-    const sizes = custom.length ? custom : (base.length ? base : [""]);
+    const sizes = standard(variant.sizes);
     for (const size of sizes) {
       const key = "v:" + code + "|" + size;
       if (key.length > 100) throw new Error("Слишком длинная комбинация цвета и размера");
@@ -1577,16 +1575,19 @@ function productNames(products) {
     const title = String(
       product?.title || product?.slug || "Товар"
     );
+    const design = String(product?.design || "").trim();
+    const displayTitle = title + (design && !title.includes(design)
+      ? " — " + design : "");
 
     if (product?.product_id) {
       byId.set(
         String(product.product_id).toLowerCase(),
-        title
+        displayTitle
       );
     }
 
     if (product?.slug) {
-      bySlug.set(String(product.slug), title);
+      bySlug.set(String(product.slug), displayTitle);
     }
   }
 
@@ -1601,16 +1602,22 @@ function getProductTitle(item, names) {
 }
 
 /* Показать администратору нормальный цвет и размер, не меняя ключи D1. */
-function displayPositionSize(slug, size, products) {
+function stockColorAndSize(slug, size, products) {
   const key = String(size || "");
   const match = /^v:([a-z0-9-]{1,25})\|(.*)$/.exec(key);
-  if (!match) return key || "Без размера";
+  if (!match) return {color:"—",size:key || "Без размера"};
   const product = products.find(p => p && p.slug === slug);
   const variant = Array.isArray(product?.variants)
     ? product.variants.find(v => v && v.code === match[1])
     : null;
-  const label = String(variant?.label || match[1]);
-  return label + (match[2] ? " / " + match[2] : "");
+  return {
+    color: String(variant?.label || match[1]),
+    size: match[2] || "Без размера"
+  };
+}
+function displayPositionSize(slug,size,products) {
+  const parts = stockColorAndSize(slug,size,products);
+  return parts.color === "—" ? parts.size : parts.color + " / " + parts.size;
 }
 
 function renderInventory(rows, products, csrf, formAction = "/developers") {
@@ -1625,7 +1632,8 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
     const firstOfProduct = !seenProducts.has(slug);
     seenProducts.add(slug);
     const size = String(item.size || "");
-    const sizeLabel = displayPositionSize(slug,size,products);
+    const colorSize = stockColorAndSize(slug,size,products);
+    const sizeLabel = colorSize.size;
     const title = getProductTitle(item, names);
     const total = Number(item.total_quantity);
 
@@ -1636,6 +1644,7 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
           <small>${esc(slug)}</small>
         </td>
 
+        <td>${esc(colorSize.color)}</td>
         <td>${esc(sizeLabel)}</td>
         <td class="num">${number(item.reserved_quantity)}</td>
         <td class="num green">${number(item.available_quantity)}</td>
@@ -1648,7 +1657,7 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
                  name="stock_quantity"
                  min="0" max="${MAX_STOCK}" step="1"
                  value="${total}" required
-                 aria-label="На складе: ${esc(title)}, ${esc(sizeLabel)}">
+                 aria-label="На складе: ${esc(title)}, ${esc(colorSize.color)}, ${esc(sizeLabel)}">
         </td>
         <td>
           <form method="POST" action="${esc(formAction)}">
@@ -1684,7 +1693,8 @@ function renderInventory(rows, products, csrf, formAction = "/developers") {
       <table>
         <thead>
           <tr>
-            <th>Товар</th>
+            <th>Товар / дизайн</th>
+            <th>Цвет</th>
             <th>Размер</th>
             <th class="num">Резерв</th>
             <th class="num">Доступно</th>

@@ -157,9 +157,8 @@ function productSizes(product) {
   const list = values => Array.isArray(values)
     ? [...new Set(values.map(value => String(value ?? "").trim()).filter(Boolean))]
     : [];
-  const base = list(product.sizes);
   const variants = Array.isArray(product.variants) ? product.variants : [];
-  if (!variants.length) return base.length ? base : [""];
+  if (!variants.length) return [];
   const allowed = [];
   const codes = new Set();
   for (const variant of variants) {
@@ -169,8 +168,7 @@ function productSizes(product) {
     }
     codes.add(code);
     if (variant.available !== true) continue;
-    const custom = list(variant.sizes);
-    const sizes = custom.length ? custom : (base.length ? base : [""]);
+    const sizes = list(variant.sizes);
     for (const size of sizes) {
       const key = "v:" + code + "|" + size;
       if (key.length > 100) throw new Error("Слишком длинная комбинация цвета и размера.");
@@ -185,9 +183,11 @@ function productVariantTitle(product, stockSize) {
   const variant = match && Array.isArray(product.variants)
     ? product.variants.find(v => v && v.code === match[1])
     : null;
-  return variant ? String(product.title || product.slug) +
-    " — " + String(variant.label || variant.code) :
-    String(product.title || product.slug);
+  const title = String(product.title || product.slug);
+  const design = String(product.design || "").trim();
+  const base = title + (design && !title.includes(design) ? " — " + design : "");
+  return variant ? base + " — " +
+    String(variant.label || variant.code) : base;
 }
 
 function productPrice(product) {
@@ -377,14 +377,6 @@ export async function onRequestPost({ request, env }) {
       if (!product) {
         return fail(
           "Товар больше не найден: " + requested.slug,
-          409
-        );
-      }
-
-      if (product.available === false) {
-        return fail(
-          "Товар недоступен: " +
-          String(product.title || requested.slug),
           409
         );
       }

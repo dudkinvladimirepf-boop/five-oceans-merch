@@ -39,6 +39,11 @@ content:
         label: Описание
         type: text
 
+      - name: design
+        label: Дизайн / надпись (для учёта)
+        type: string
+        description: Общая вышивка, принт или текст для всех цветов этого товара. Для другой надписи создавайте отдельную карточку — так CRM не смешает остатки разных дизайнов.
+
       - name: price
         label: Цена в рублях
         type: number
@@ -62,22 +67,11 @@ content:
             - name: аксессуары
               label: Аксессуары и сувениры
 
-      - name: photos
-        label: Фотографии
-        type: image
-        options:
-          multiple:
-            max: 6
-
-      - name: sizes
-        label: Размеры
-        type: string
-        list: true
-
       - name: variants
-        label: Цвета и фотографии (варианты товара)
+        label: Цвета товара (фотографии, размеры и статус)
         type: object
-        description: Одна карточка на дизайн. Добавляйте и удаляйте цвета здесь. Если цветов нет, действует прежняя карточка.
+        required: true
+        description: Все фотографии, размеры и признаки находятся только внутри своего цвета. Одна общая карточка для одного дизайна во всех его цветах. Для каждой новой надписи создайте отдельный товар.
         list:
           collapsible:
             collapsed: true
@@ -88,45 +82,42 @@ content:
             type: string
             required: true
             pattern: "^[a-z0-9][a-z0-9-]{0,24}$"
-            description: Уникальный код латиницей (black, red). После продажи не переименовывайте, чтобы сохранялась связь с заказами и D1.
+            description: Постоянный код латиницей (red, white, black). Не меняйте после синхронизации со складом или оформления заказов.
           - name: label
-            label: Название цвета (для заказов)
+            label: Название цвета
             type: string
             required: true
-            description: Покупатель видит только кружок, название нужно для заказов и подсказок.
+            description: Например Красный. Покупатель выбирает цвет кружком; название показывается в корзине и CRM.
           - name: hex
             label: Цвет кружка
             type: string
             required: true
             pattern: "^#[0-9A-Fa-f]{6}$"
-            description: HEX цвет, например #161616 для чёрного, #C62828 для красного.
-          - name: available
-            label: Цвет доступен для заказа
-            type: boolean
-            description: Выключите для цвета, которого сейчас нет. Это не меняет численные складские остатки.
+            description: HEX-код цвета, например #E30613 для красного или #F5F5F5 для белого.
           - name: photos
             label: Фотографии этого цвета
             type: image
             options:
               multiple:
                 max: 6
+            description: До 6 фотографий только этого цвета. Первая — обложка в каталоге.
           - name: sizes
             label: Размеры этого цвета
             type: string
             list: true
-            description: Если пусто, используются общие размеры товара выше. Только реальные размеры без количества.
-
-      - name: available
-        label: В наличии
-        type: boolean
-
-      - name: featured
-        label: Наш выбор
-        type: boolean
-
-      - name: new_arrival
-        label: Новинка
-        type: boolean
+            description: Каждый размер вписывайте отдельно (например 46-48). Пока размеры не добавлены, складская позиция для цвета не создаётся. Для аксессуара без размеров укажите «Без размера».
+          - name: available
+            label: В наличии — этот цвет
+            type: boolean
+            description: Отдельный переключатель для цвета. Для продажи также требуется ненулевой остаток соответствующего цвета и размера в CRM.
+          - name: featured
+            label: Наш выбор — этот цвет
+            type: boolean
+            description: Показывать в разделе «Наш выбор» именно этот цвет (если он доступен).
+          - name: new_arrival
+            label: Новинка — этот цвет
+            type: boolean
+            description: Показывать в разделе «Новинки» именно этот цвет (если он доступен).
 
   - name: categories
     label: Категории
