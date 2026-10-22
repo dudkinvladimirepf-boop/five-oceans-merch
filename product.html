@@ -746,9 +746,8 @@ async function loadProduct() {
     // Общие фотографии разрешены только товарам без вариантов.
     function renderGallery() {
       gallery.replaceChildren();
-      const photos = selectedVariant
-        ? (Array.isArray(selectedVariant.photos) ? selectedVariant.photos.filter(Boolean) : [])
-        : (Array.isArray(product.photos) ? product.photos.filter(Boolean) : []);
+      const photos = selectedVariant && Array.isArray(selectedVariant.photos)
+        ? selectedVariant.photos.filter(Boolean) : [];
       if (!photos.length) {
         gallery.appendChild(makeElement(
           "div", "no-photo",
