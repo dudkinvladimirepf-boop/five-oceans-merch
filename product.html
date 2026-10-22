@@ -408,6 +408,21 @@ footer {
   .stepper-value { min-width: 29px; }
   .add-button { font-size: 13px; }
 }
+.variant-flags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.variant-flag {
+  display: inline-block;
+  background: #eef3f7;
+  border: 1px solid #d9e4eb;
+  border-radius: 20px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: bold;
+}
 </style>
 <link rel="stylesheet" href="/site-theme.css">
 </head>
@@ -642,10 +657,9 @@ function productVariants(product) {
     return true;
   });
 }
-function availableSizes(product, variant) {
-  const own = normalizedSizes(variant?.sizes);
-  const main = normalizedSizes(product.sizes);
-  return own.length ? own : main;
+function availableSizes(_product, variant) {
+  // Размеры устанавливаются отдельно для каждого цвета в Pages CMS.
+  return normalizedSizes(variant?.sizes);
 }
 
 /* ЗАГРУЗКА ТОВАРА */
@@ -720,12 +734,13 @@ async function loadProduct() {
     // На первом экране выбираем доступный цвет с фотографиями.
     // Если снимков нет вообще, показываем первый доступный цвет.
     const withPhotos = v => Array.isArray(v?.photos) && v.photos.some(Boolean);
+    const requestedColor = new URLSearchParams(location.search).get("color");
     let selectedVariant =
+      variants.find(v => v.code === requestedColor) ||
       variants.find(v => v.available === true && withPhotos(v)) ||
       variants.find(v => v.available === true) ||
       variants.find(withPhotos) || variants[0] || null;
-    let available = product.available === true &&
-      (!variants.length || selectedVariant.available === true);
+    let available = selectedVariant?.available === true;
 
     // Каждый цвет имеет строго свою фотогалерею.
     // Общие фотографии разрешены только товарам без вариантов.
@@ -804,6 +819,22 @@ async function loadProduct() {
 
     details.appendChild(status);
 
+    // «Новинка» и «Наш выбор» относятся только к выбранному цвету.
+    const variantFlags = makeElement("div","variant-flags");
+    details.appendChild(variantFlags);
+    function renderVariantMeta() {
+      status.className = available ? "status" : "status off";
+      status.textContent = available ? "В наличии" : "Нет в наличии";
+      variantFlags.replaceChildren();
+      if (selectedVariant?.new_arrival === true) {
+        variantFlags.appendChild(makeElement("span","variant-flag","Новинка"));
+      }
+      if (selectedVariant?.featured === true) {
+        variantFlags.appendChild(makeElement("span","variant-flag","Наш выбор"));
+      }
+    }
+    renderVariantMeta();
+
     /* Кружки без текстовых подписей. Названия — в aria-label и подсказках. */
     if (variants.length) {
       const row = makeElement("div","color-swatches");
@@ -831,7 +862,8 @@ async function loadProduct() {
         button.addEventListener("click",()=>{
           if (busy) return;
           selectedVariant = variant;
-          available = product.available === true && variant.available === true;
+          available = variant.available === true;
+          renderVariantMeta();
           sizes = availableSizes(product,variant);
           selectedSize = sizes[0] || null;
           pendingQuantity = 1;
