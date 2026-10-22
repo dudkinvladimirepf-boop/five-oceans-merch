@@ -1499,6 +1499,15 @@ async function restoreStock(context, form) {
       "Сначала восстанови его в Pages CMS, затем повтори операцию.");
   }
   const db = database(context.env);
+  const archivedId = await db.prepare(
+    "SELECT product_id FROM inventory_exclusions WHERE product_slug = ? AND size = ?"
+  ).bind(slug,size).first();
+  if (archivedId?.product_id &&
+      String(archivedId.product_id).toLowerCase() !==
+      String(product.product_id || "").toLowerCase()) {
+    throw new Error("Идентификатор товара отличается от удалённого. " +
+      "Не восстанавливай старые остатки для новой карточки.");
+  }
   const result = await db.prepare(
     "DELETE FROM inventory_exclusions WHERE product_slug = ? AND size = ?"
   ).bind(slug, size).run();
@@ -1537,6 +1546,16 @@ async function restoreProduct(context, form) {
   if (!product) throw new Error("Сначала верни товар в Pages CMS.");
   const allowedSizes = sizesOf(product);
   const db = database(context.env);
+  const differentId = await db.prepare(
+    `SELECT 1 FROM inventory_exclusions
+     WHERE product_slug = ? AND product_id IS NOT NULL
+       AND lower(product_id) <> lower(?)
+     LIMIT 1`
+  ).bind(slug,String(product.product_id || "")).first();
+  if (differentId) {
+    throw new Error("Это новая карточка с прежним адресом, но другим ID. " +
+      "Автоматически переносить на неё старые остатки нельзя.");
+  }
   const removed = await db.prepare(
     `DELETE FROM inventory_exclusions
      WHERE product_slug = ?
