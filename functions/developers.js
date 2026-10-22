@@ -790,10 +790,13 @@ function renderStockFilters(rows, products, filters) {
     a.label.localeCompare(b.label, "ru") ||
     a.value.localeCompare(b.value, "ru")
   );
-  const sizeList = [...sizes].map(size => ({
-    value: "size:" + size,
-    label: size || "Без размера"
-  })).sort((a, b) => a.label.localeCompare(b.label, "ru"));
+  const sizeList = [...sizes].map(size => {
+    const sample = rows.find(item => String(item.size || "") === size);
+    return {
+      value: "size:" + size,
+      label: displayPositionSize(String(sample?.product_slug || ""),size,products)
+    };
+  }).sort((a, b) => a.label.localeCompare(b.label, "ru"));
 
   return `
     <form method="GET" action="/developers#stock" class="filters-form">
