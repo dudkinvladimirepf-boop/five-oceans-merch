@@ -767,33 +767,19 @@ async function loadProduct() {
 
     /* РАЗМЕРЫ */
 
-    const sizes = Array.isArray(product.sizes)
-      ? [
-          ...new Set(
-            product.sizes
-              .map(normalizeSize)
-              .filter(Boolean)
-          )
-        ]
-      : [];
-
+    let sizes = availableSizes(product,selectedVariant);
     const savedCart = safelyReadCart();
-
-    let selectedSize = null;
-
+    let selectedSize = sizes[0] || null;
     if (sizes.length) {
-
-      const previousItem = [...savedCart]
-        .reverse()
-        .find(item =>
-          item.slug === product.slug &&
-          sizes.includes(normalizeSize(item.size)) &&
-          validQuantity(item.quantity) > 0
-        );
-
-      selectedSize = previousItem
-        ? normalizeSize(previousItem.size)
-        : sizes[0];
+      const previous = [...savedCart].reverse().find(item =>
+        item.slug === product.slug && validQuantity(item.quantity) > 0 &&
+        sizes.some(size => item.size === variantStockSize(selectedVariant,size))
+      );
+      if (previous) {
+        selectedSize = sizes.find(size=>
+          variantStockSize(selectedVariant,size) === previous.size
+        ) || sizes[0];
+      }
     }
 
     let pendingQuantity = 1;
@@ -815,46 +801,33 @@ async function loadProduct() {
     let stockRequestId = 0;
     let busy = false;
 
-    if (sizes.length) {
+    const sizeHeading = makeElement("h3","size-heading","Размер");
+    const sizesRow = makeElement("div","sizes");
+    details.append(sizeHeading,sizesRow);
 
-      details.appendChild(
-        makeElement("h3", "size-heading", "Размер")
-      );
-
-      const sizesRow = makeElement("div", "sizes");
-
+    function buildSizeButtons() {
+      sizeButtons.clear();
+      sizesRow.replaceChildren();
+      sizeHeading.hidden = !sizes.length;
+      sizesRow.hidden = !sizes.length;
       sizes.forEach(size => {
-
-        const button = makeElement(
-          "button",
-          "size",
-          size
-        );
-
-        button.type = "button";
+        const button = makeElement("button","size",size);
+        button.type="button";
         button.disabled = !available;
-
-        button.addEventListener("click", () => {
-
+        button.addEventListener("click",()=>{
           if (busy) return;
-
           selectedSize = size;
           pendingQuantity = 1;
-
           message.textContent = "";
-
           renderSizes();
           renderPurchase();
           refreshStockState();
-
         });
-
-        sizeButtons.set(size, button);
+        sizeButtons.set(size,button);
         sizesRow.appendChild(button);
       });
-
-      details.appendChild(sizesRow);
     }
+    buildSizeButtons();
 
     function renderSizes() {
       sizeButtons.forEach((button, size) => {
