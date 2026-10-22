@@ -1,44 +1,15 @@
 [
   {
-    "product_id": "a6f96faa-ae5c-46bb-b614-db11c9d36eb6",
-    "title": "Футболка Конюхов",
-    "slug": "futbolka-konyukhov",
-    "description": "бла бла бла",
-    "price": 8000,
-    "category": "футболки",
+    "product_id": "6adb0179-7668-4942-8a7b-1806dfec65b9",
+    "title": "Свитшот «Клуб 5 океанов»",
+    "slug": "svitshot-klub-5-okeanov",
+    "description": "Свитшот «Клуб 5 океанов» — лаконичная модель с фирменным вышитым логотипом клуба на груди.\n\nКлассический силуэт с круглым вырезом, длинными рукавами и манжетами. Минималистичный дизайн без крупных принтов делает свитшот универсальным вариантом для повседневного гардероба, путешествий и прогулок.\n\n**Характеристики:**\n- Материал: хлопок\n- Декор: вышитый логотип Клуба «5 океанов» на груди\n- Рукав: длинный\n- Вырез: круглый\n- Спинка: без принта\n- Страна производства: Россия",
+    "price": 2599,
+    "category": "свитшоты",
     "sizes": [
-      "52-54",
-      "L"
+      "46-48"
     ],
-    "available": true,
-    "featured": true,
-    "new_arrival": true
-  },
-  {
-    "product_id": "9766eb52-4691-4785-ad3f-1b2926aa6552",
-    "title": "Брелок субмарина",
-    "slug": "brelok_submarine",
-    "description": "ахахахаах",
-    "price": 9000,
-    "category": "аксессуары",
-    "photos": [
-      "/media/oceanhdlogo.png"
-    ],
-    "available": true,
-    "featured": true,
-    "new_arrival": true
-  },
-  {
-    "product_id": "c4e95dbe-0aa1-4d29-8378-11744bebe889",
-    "title": "хз что",
-    "slug": "xz_chto",
-    "description": "рапрапр",
-    "price": 200,
-    "category": "головные-уборы",
-    "photos": [
-      "/media/logo5oceanscoloreng-1.jpg"
-    ],
-    "available": true,
+    "available": false,
     "featured": false,
     "new_arrival": false
   }
