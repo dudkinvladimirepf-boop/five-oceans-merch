@@ -1210,7 +1210,12 @@ async function saveStock(context, form) {
          updated_at = CURRENT_TIMESTAMP
      WHERE product_slug = ? AND size = ?
        AND total_quantity = ?
-       AND reserved_quantity <= ?`
+       AND reserved_quantity <= ?
+       AND NOT EXISTS (
+         SELECT 1 FROM inventory_exclusions AS e
+         WHERE e.product_slug = inventory.product_slug
+           AND e.size = inventory.size
+       )`
   ).bind(
     quantity, slug, size, expected, quantity
   ).run();
@@ -1327,6 +1332,10 @@ async function saveStockBulk(context, form) {
         AND i.size = e.size
        WHERE i.total_quantity = e.previous
          AND i.reserved_quantity <= e.quantity
+         AND NOT EXISTS (
+           SELECT 1 FROM inventory_exclusions AS ex
+           WHERE ex.product_slug = i.product_slug AND ex.size = i.size
+         )
      ) = (SELECT COUNT(*) FROM edits)`
   ).bind(JSON.stringify(updated)).run();
 
