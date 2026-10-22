@@ -765,6 +765,52 @@ async function loadProduct() {
 
     details.appendChild(status);
 
+    /* Кружки без текстовых подписей. Названия — в aria-label и подсказках. */
+    if (variants.length) {
+      const row = makeElement("div","color-swatches");
+      row.setAttribute("role","group");
+      row.setAttribute("aria-label","Выбор цвета");
+      const buttons = new Map();
+
+      function updateColorButtons() {
+        buttons.forEach((button,code)=>{
+          const selected = selectedVariant?.code === code;
+          button.classList.toggle("selected",selected);
+          button.setAttribute("aria-pressed",String(selected));
+        });
+      }
+
+      for (const variant of variants) {
+        const button = document.createElement("button");
+        button.type="button";
+        button.className="color-swatch";
+        button.style.setProperty("--swatch-color", variant.hex);
+        button.setAttribute("aria-label",variant.label || variant.code);
+        button.title = (variant.label || variant.code) +
+          (variant.available === true ? "" : " — нет в наличии");
+        if (variant.available !== true) button.classList.add("unavailable");
+        button.addEventListener("click",()=>{
+          if (busy) return;
+          selectedVariant = variant;
+          available = product.available === true && variant.available === true;
+          sizes = availableSizes(product,variant);
+          selectedSize = sizes[0] || null;
+          pendingQuantity = 1;
+          message.textContent = "";
+          renderGallery();
+          buildSizeButtons();
+          updateColorButtons();
+          renderPurchase();
+          refreshStockState();
+        });
+        buttons.set(variant.code,button);
+        row.appendChild(button);
+      }
+
+      updateColorButtons();
+      details.appendChild(row);
+    }
+
     /* РАЗМЕРЫ */
 
     let sizes = availableSizes(product,selectedVariant);
