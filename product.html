@@ -188,6 +188,34 @@ h1 {
   opacity: .5;
   cursor: not-allowed;
 }
+/* Варианты цвета — только цветовые кружки, без надписей. */
+.color-swatches {
+  display:flex; flex-wrap:wrap; align-items:center; gap:12px;
+  margin:8px 0 23px;
+}
+.color-swatch {
+  width:32px; height:32px; border-radius:50%; padding:0;
+  border:2px solid #fff;
+  background:var(--swatch-color,#bbb);
+  box-shadow:0 0 0 1px #bdc9d3;
+  cursor:pointer; position:relative; flex:none;
+}
+.color-swatch.selected {
+  box-shadow:0 0 0 2px #c00c79,0 0 0 4px #fff;
+}
+.color-swatch.unavailable {
+  opacity:.4;
+}
+.color-swatch.unavailable::after {
+  content:""; position:absolute; width:44px; height:1px;
+  background:#24384b; left:50%; top:50%;
+  transform:translate(-50%,-50%) rotate(-45deg);
+  pointer-events:none;
+}
+.color-swatch:focus-visible {
+  outline:2px solid #c00c79; outline-offset:5px;
+}
+
 
 /* ПОКУПКА */
 
