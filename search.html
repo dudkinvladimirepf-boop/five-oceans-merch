@@ -22,6 +22,20 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
 </main>
 <footer></footer>
 <script>
+function catalogVariant(product) {
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  return variants.find(v=>v && v.available===true) || variants[0] || null;
+}
+function catalogPhoto(product) {
+  const variant=catalogVariant(product);
+  const photos=Array.isArray(variant?.photos)?variant.photos.filter(Boolean):[];
+  return photos[0] || (Array.isArray(product.photos)?product.photos.find(Boolean):null) || null;
+}
+function catalogAvailable(product) {
+  const variants=Array.isArray(product.variants)?product.variants:[];
+  return product.available===true && (!variants.length || variants.some(v=>v?.available===true));
+}
+
 (async function () {
   const params = new URLSearchParams(location.search);
   const searchTerm = (params.get("q") || "").trim().slice(0,100);
@@ -70,8 +84,8 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
     const categoryNames = new Map(categories.map(c=>[normalize(c.id),c.title]));
     const visible = products.filter(p=>{
       if (!p || !p.slug) return false;
-      if (collection === "new" && (p.new_arrival !== true || p.available !== true)) return false;
-      if (collection === "featured" && (p.featured !== true || p.available !== true)) return false;
+      if (collection === "new" && (p.new_arrival !== true || !catalogAvailable(p))) return false;
+      if (collection === "featured" && (p.featured !== true || !catalogAvailable(p))) return false;
       if (!searchTerm) return true;
       const combined = [
         p.title,p.description,p.slug,
@@ -90,8 +104,7 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
       const card = document.createElement("a");
       card.className = "card";
       card.href = "/product.html?slug=" + encodeURIComponent(product.slug);
-      const photo = Array.isArray(product.photos) ?
-        product.photos.find(Boolean) : null;
+      const photo = catalogPhoto(product);
       if (photo) {
         const img = document.createElement("img");
         img.src = photo;
@@ -113,7 +126,7 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
       price.textContent = money(product.price);
       const more = document.createElement("div");
       more.className = "open-product";
-      more.textContent = product.available === false ?
+      more.textContent = !catalogAvailable(product) ?
         "Подробнее · Нет в наличии →" : "Подробнее о товаре →";
       info.append(title,price,more);
       card.append(info);
