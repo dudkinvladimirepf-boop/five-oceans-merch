@@ -293,7 +293,11 @@ async function inventoryRows(env) {
             total_quantity, reserved_quantity,
             total_quantity - reserved_quantity
               AS available_quantity
-     FROM inventory
+     FROM inventory AS i
+     WHERE NOT EXISTS (
+       SELECT 1 FROM inventory_exclusions AS e
+       WHERE e.product_slug = i.product_slug AND e.size = i.size
+     )
      ORDER BY product_slug, size`
   ).all();
 
@@ -302,13 +306,87 @@ async function inventoryRows(env) {
 
 async function excludedRows(env) {
   const result = await database(env).prepare(
-    `SELECT product_slug, product_id, size, deleted_at
-     FROM inventory_exclusions
-     ORDER BY deleted_at DESC
-     LIMIT 500`
+    `SELECT e.product_slug, e.product_id, e.size, e.deleted_at,
+            i.total_quantity, i.reserved_quantity
+     FROM inventory_exclusions AS e
+     LEFT JOIN inventory AS i
+       ON i.product_slug = e.product_slug AND i.size = e.size
+     ORDER BY e.deleted_at DESC, e.product_slug, e.size
+     LIMIT 1000`
   ).all();
-
   return result.results || [];
+}
+
+/*
+  Резерв — денормализованный счётчик в inventory.
+  При ручном удалении заказов он может отличаться от суммы
+  позиций действующих заказов со статусом reserved.
+  Диагностика ничего не изменяет; исправление — отдельная кнопка.
+*/
+const EXPECTED_RESERVE_SQL = `COALESCE((
+  SELECT SUM(oi.quantity)
+  FROM order_items AS oi
+  JOIN orders AS o ON o.order_id = oi.order_id
+  WHERE o.status = 'reserved'
+    AND oi.product_slug = inventory.product_slug
+    AND oi.size = inventory.size
+), 0)`;
+
+async function reserveDiagnostics(env) {
+  const db = database(env);
+  const row = await db.prepare(
+    `SELECT COUNT(*) AS mismatches FROM inventory
+     WHERE reserved_quantity <> ${EXPECTED_RESERVE_SQL}`
+  ).first();
+  const orphan = await db.prepare(
+    `SELECT COUNT(*) AS missing FROM order_items AS oi
+     JOIN orders AS o ON o.order_id = oi.order_id
+     LEFT JOIN inventory AS i
+       ON i.product_slug = oi.product_slug AND i.size = oi.size
+     WHERE o.status = 'reserved' AND i.product_slug IS NULL`
+  ).first();
+  return { mismatches: Number(row?.mismatches || 0),
+           missing: Number(orphan?.missing || 0) };
+}
+
+async function repairReservations(env) {
+  const db = database(env);
+  const diagnostics = await reserveDiagnostics(env);
+  if (diagnostics.missing) {
+    throw new Error("Есть резервные заказы без складской позиции. " +
+      "Исправление остановлено для сохранения данных заказов.");
+  }
+  const impossible = await db.prepare(
+    `SELECT COUNT(*) AS count FROM inventory
+     WHERE ${EXPECTED_RESERVE_SQL} > total_quantity`
+  ).first();
+  if (Number(impossible?.count || 0)) {
+    throw new Error("Резерв действующих заказов превышает общий остаток. " +
+      "Автоматическое исправление остановлено.");
+  }
+  const result = await db.prepare(
+    `UPDATE inventory
+     SET reserved_quantity = ${EXPECTED_RESERVE_SQL},
+         updated_at = CURRENT_TIMESTAMP
+     WHERE reserved_quantity <> ${EXPECTED_RESERVE_SQL}
+       AND NOT EXISTS (
+         SELECT 1 FROM (
+           SELECT i.total_quantity, i.product_slug, i.size,
+                  COALESCE(SUM(CASE WHEN o.status = 'reserved'
+                     THEN oi.quantity ELSE 0 END), 0) AS needed
+           FROM inventory AS i
+           LEFT JOIN order_items AS oi ON oi.product_slug = i.product_slug
+              AND oi.size = i.size
+           LEFT JOIN orders AS o ON o.order_id = oi.order_id
+           GROUP BY i.product_slug, i.size
+         ) AS state WHERE state.needed > state.total_quantity
+       )`
+  ).run();
+  if (Number(result.meta?.changes || 0) !== diagnostics.mismatches) {
+    throw new Error("Резерв изменился во время исправления. Обнови CRM и проверь данные.");
+  }
+  return "Резервы сверены с действующими заказами. Исправлено позиций: " +
+    diagnostics.mismatches + ".";
 }
 
 async function recentOrders(env, filters = {}) {
