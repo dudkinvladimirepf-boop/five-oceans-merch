@@ -235,13 +235,29 @@ function hidden(name, value) {
 }
 
 function sizesOf(product) {
-  const sizes = Array.isArray(product.sizes)
-    ? [...new Set(product.sizes
-        .map(x => String(x ?? "").trim())
-        .filter(Boolean))]
+  const standard = values => Array.isArray(values)
+    ? [...new Set(values.map(x => String(x ?? "").trim()).filter(Boolean))]
     : [];
-
-  return sizes.length ? sizes : [""];
+  const base = standard(product.sizes);
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  if (!variants.length) return base.length ? base : [""];
+  const result = [];
+  const codes = new Set();
+  for (const variant of variants) {
+    const code = String(variant?.code || "").trim();
+    if (!/^[a-z0-9][a-z0-9-]{0,24}$/.test(code) || codes.has(code)) {
+      throw new Error("Неверный или повторяющийся код цвета: " + code);
+    }
+    codes.add(code);
+    const custom = standard(variant.sizes);
+    const sizes = custom.length ? custom : (base.length ? base : [""]);
+    for (const size of sizes) {
+      const key = "v:" + code + "|" + size;
+      if (key.length > 100) throw new Error("Слишком длинная комбинация цвета и размера");
+      result.push(key);
+    }
+  }
+  return result;
 }
 
 async function productsFromCMS(context) {
