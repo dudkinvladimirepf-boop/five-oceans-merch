@@ -387,6 +387,21 @@ async function repairReservations(env) {
     diagnostics.mismatches + ".";
 }
 
+// Независимый от фильтров и таблицы позиций счётчик всех заказов D1.
+async function orderCounts(env) {
+  const row = await database(env).prepare(
+    `SELECT COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+            COALESCE(SUM(CASE WHEN status = 'reserved' THEN 1 ELSE 0 END), 0) AS reserved
+     FROM orders`
+  ).first();
+  return {
+    total: Number(row?.total || 0),
+    pending: Number(row?.pending || 0),
+    reserved: Number(row?.reserved || 0)
+  };
+}
+
 async function recentOrders(env, filters = {}) {
   const number = String(filters.order_number || "");
   const status = String(filters.order_status || "");
@@ -703,7 +718,8 @@ function renderOrders(orders, csrf, formAction = "/developers") {
   if (!orders.length) {
     return '<p class="muted">По выбранным условиям заказов не найдено.</p>';
   }
-  return orders.map(order => {
+  // При входе показываем состав нескольких последних новых заявок сразу.
+  return orders.map((order, index) => {
     const status = String(order.status || "pending");
     const shippingStatus = order.shipping_status === "shipped"
       ? "shipped"
@@ -726,7 +742,7 @@ function renderOrders(orders, csrf, formAction = "/developers") {
     `).join("");
 
     return `
-      <details class="order-card">
+      <details class="order-card" ${status === "pending" && index < 3 ? "open" : ""}>
         <summary class="order-summary">
           <span class="order-title">${esc(order.order_id)}</span>
           <span class="status-pill source-${order.source === "telegram" ? "telegram" : "site"}">
@@ -1810,11 +1826,13 @@ async function dashboard(context, secret, options = {}) {
   let excluded = [];
   let products = [];
   let orders = [];
+  let counts = null;
+  let ordersLoaded = false;
   let orderChoices = { statuses: [], shipping: [], sources: [], products: [] };
   const filters = readDashboardFilters(context.request);
   const requestedTab = new URL(context.request.url).searchParams.get("tab");
   const tab = ["stock","trash","orders"].includes(requestedTab)
-    ? requestedTab : "stock";
+    ? requestedTab : "orders";
   const queryParameters = new URLSearchParams(filteredQuery(filters));
   queryParameters.set("tab",tab);
   const formAction = "/developers?" + queryParameters.toString();
@@ -1840,11 +1858,23 @@ async function dashboard(context, secret, options = {}) {
   }
 
   try {
+    // Сводка читается отдельно: не исчезает при ошибке списка или фильтров.
+    counts = await orderCounts(context.env);
+  } catch (error) {
+    console.error("CRM D1 order counter:", error);
+    problems.push("Не удалось прочитать количество заказов из D1. " +
+      "Проверь привязку базы данных и таблицу orders.");
+  }
+
+  try {
     orders = await recentOrders(context.env, filters);
     orderChoices = await orderFilterOptions(context.env);
+    ordersLoaded = true;
   } catch (error) {
-    console.error(error);
-    problems.push("Не удалось загрузить список заказов.");
+    console.error("CRM D1 order list:", error);
+    problems.push("Не удалось загрузить заявки из D1. " +
+      "Если в счётчике заказы есть, проверь таблицу order_items " +
+      "и поля source/shipping_status в orders.");
   }
 
   const total = stock.reduce(
@@ -1863,12 +1893,23 @@ async function dashboard(context, secret, options = {}) {
     <div class="success">✓ Вы авторизованы</div>
 
     <nav class="admin-tabs" aria-label="Разделы CRM">
+      <a href="/developers?tab=orders" class="${tab==="orders"?"active":""}">
+        Заявки и заказы
+        ${counts ? `<span class="tab-count">${number(counts.pending)} новых</span>` : ""}
+      </a>
       <a href="/developers?tab=stock" class="${tab==="stock"?"active":""}">Склад</a>
       <a href="/developers?tab=trash" class="${tab==="trash"?"active":""}">
         Корзина товаров <span class="tab-count">${number(excluded.length)}</span>
       </a>
-      <a href="/developers?tab=orders" class="${tab==="orders"?"active":""}">Заказы</a>
     </nav>
+
+    ${counts?.pending > 0 && tab !== "orders" ? `
+      <div class="orders-attention">
+        <strong>Необработанные заявки: ${number(counts.pending)}</strong>
+        <a href="/developers?tab=orders&order_status=pending#orders">
+          Посмотреть новые заявки →
+        </a>
+      </div>` : ""}
 
     ${options.message ? `<div class="success">✓ ${esc(options.message)}</div>` : ""}
     ${options.error ? `<div class="error">${esc(options.error)}</div>` : ""}
@@ -1941,14 +1982,42 @@ async function dashboard(context, secret, options = {}) {
     ${tab === "orders" ? `
       <section class="section" id="orders">
         <div class="order-header">
-          <h2>Заказы (${orders.length})</h2>
+          <h2>Заявки и заказы</h2>
           <a class="order-refresh" href="${esc(formAction)}#orders">↻ Обновить</a>
         </div>
-        <p class="muted">Показаны до 100 последних совпадений.
-          Поиск и фильтры работают по всей базе заказов D1.</p>
-        ${renderOrderFilters(orderChoices,filters)}
-        <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
-        ${renderOrders(orders,csrf,formAction)}
+        ${counts ? `
+          <div class="stats orders-stats">
+            <div class="stat"><span>Всего заказов в D1</span>
+              <strong>${number(counts.total)}</strong></div>
+            <div class="stat"><span>Новые заявки</span>
+              <strong>${number(counts.pending)}</strong></div>
+            <div class="stat"><span>В резерве</span>
+              <strong>${number(counts.reserved)}</strong></div>
+          </div>
+        ` : ""}
+        <p class="muted">Заказ с сайта сохраняется здесь до перехода в Telegram
+          со статусом «Новый». Товар не резервируется до нажатия «В резерв».
+          Сообщения и контакты из Telegram-бота пока не синхронизируются с этой базой.</p>
+        ${counts?.pending > 0 ? `
+          <p class="order-shortcut">
+            <a href="/developers?tab=orders&order_status=pending#orders">
+              Показать только новые заявки (${number(counts.pending)}) →
+            </a>
+          </p>` : ""}
+        ${counts?.total === 0 ? `
+          <p class="muted">В подключённой базе D1 ещё нет заказов.
+            Успешное оформление с сайта должно создать запись автоматически.</p>` : ""}
+        ${ordersLoaded ? `
+          <p class="muted">Показаны до 100 последних совпадений.
+            Поиск и фильтры работают по всей базе заказов D1.</p>
+          ${renderOrderFilters(orderChoices,filters)}
+          <p class="muted">Найдено и показано заказов: ${number(orders.length)}.</p>
+          ${renderOrders(orders,csrf,formAction)}
+        ` : `
+          <p class="error">Не удалось отобразить список заказов.
+            Количество заказов выше, если доступно, прочитано отдельно из D1.
+            Заказы не удалены этой операцией.</p>
+        `}
       </section>
     ` : ""}
 
@@ -2074,6 +2143,15 @@ h3 { font-size: 19px; margin: 0 0 15px; }
   padding: 25px;
   margin: 25px 0;
 }
+.orders-attention {
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+  gap:12px; padding:15px 18px;
+  border:1px solid #dce6ee; border-radius:10px;
+  margin:16px 0; background:#f5f9fc;
+}
+.orders-attention a, .order-shortcut a {color:#146789; font-weight:700;}
+.orders-stats {margin:18px 0;}
+.order-shortcut {margin:15px 0;}
 .admin-tabs {
   display:flex; flex-wrap:wrap; gap:9px; align-items:center;
   margin:22px 0 25px; padding-bottom:14px;
