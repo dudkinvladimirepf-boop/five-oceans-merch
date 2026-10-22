@@ -181,7 +181,7 @@ function productSizes(product) {
 }
 
 function productVariantTitle(product, stockSize) {
-  const match = /^v:([a-z0-9-]{1,25})\\|/.exec(stockSize);
+  const match = /^v:([a-z0-9-]{1,25})\|/.exec(stockSize);
   const variant = match && Array.isArray(product.variants)
     ? product.variants.find(v => v && v.code === match[1])
     : null;
