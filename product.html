@@ -1031,7 +1031,7 @@ async function loadProduct() {
       return cartQuantity(
         safelyReadCart(),
         product.slug,
-        selectedSize
+        variantStockSize(selectedVariant,selectedSize)
       );
     }
 
@@ -1146,7 +1146,7 @@ async function loadProduct() {
 
         const result = await checkStock(
           product.slug,
-          size,
+          variantStockSize(selectedVariant,size),
           1
         );
 
@@ -1198,7 +1198,7 @@ async function loadProduct() {
 
       const result = await checkStock(
         product.slug,
-        size,
+        variantStockSize(selectedVariant,size),
         quantity
       );
 
@@ -1254,7 +1254,7 @@ async function loadProduct() {
         const newCart = setItemQuantity(
           cart,
           product.slug,
-          size,
+          variantStockSize(selectedVariant,size),
           newQuantity
         );
 
