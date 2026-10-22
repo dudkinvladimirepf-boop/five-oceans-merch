@@ -1575,16 +1575,19 @@ function productNames(products) {
     const title = String(
       product?.title || product?.slug || "Товар"
     );
+    const design = String(product?.design || "").trim();
+    const displayTitle = title + (design && !title.includes(design)
+      ? " — " + design : "");
 
     if (product?.product_id) {
       byId.set(
         String(product.product_id).toLowerCase(),
-        title
+        displayTitle
       );
     }
 
     if (product?.slug) {
-      bySlug.set(String(product.slug), title);
+      bySlug.set(String(product.slug), displayTitle);
     }
   }
 
