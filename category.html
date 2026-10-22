@@ -468,17 +468,8 @@ function createProductCard(product) {
     )
   );
 
-  /* Наличие */
-
+  /* Статус наличия используем только для логики показа размеров. */
   const available = catalogAvailable(product);
-
-  info.appendChild(
-    createElement(
-      "p",
-      available ? "status" : "status off",
-      available ? "В наличии" : "Нет в наличии"
-    )
-  );
 
   /* Размеры */
 
