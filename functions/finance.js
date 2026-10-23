@@ -185,7 +185,7 @@ function show(data,summary,products,token,notice,error) {
       '<td>'+p.sold+'</td><td>'+money(p.revenue)+'</td><td>'+money(p.cost)+'</td><td>'+money(p.due)+'</td>'+
       '<td>'+p.missing+'</td></tr>').join("")+'</table></div></div>';
   const supplierOptions=options(data.suppliers,x=>x.id,x=>x.name);
-  const catalogOptions=products.filter(p=>p.finance_enabled===true && p.published!==undefined)
+  const catalogOptions=products.filter(p=>p.finance_enabled===true)
     .flatMap(p=>(p.variants||[]).flatMap(v=>(v.sizes||[]).map(size=>{
       const stockSize="v:"+v.code+"|"+size;
       return {value:JSON.stringify([p.product_id,stockSize]),label:p.title+" — "+v.label+" / "+size};
@@ -341,4 +341,100 @@ export async function onRequestPost(context){
       return reply(layout('<p class="error">'+esc(error.message)+'</p><a href="/finance">Назад</a>'),400);
     }
   }
+}
+
+
+// Minimal valid XLSX (OOXML / ZIP stored entries): no third-party packages,
+// numeric cells remain numeric and text is always inlineStr (not formulae).
+function bytes(...parts) {
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let offset=0;for(const p of parts){out.set(p,offset);offset+=p.length;}
+  return out;
+}
+function two(n){return Uint8Array.of(n&255,(n>>>8)&255);}
+function four(n){return Uint8Array.of(n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255);}
+function crc32(buf) {
+  let c=-1;
+  for(const b of buf){c^=b;for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0);}
+  return (c^(-1))>>>0;
+}
+function zipStore(entries){
+  const local=[],central=[];let offset=0;
+  for(const [name,content] of entries){
+    const filename=encode.encode(name),data=encode.encode(content),crc=crc32(data);
+    const header=bytes(four(0x04034b50),two(20),two(0x0800),two(0),two(0),two(0),
+      four(crc),four(data.length),four(data.length),two(filename.length),two(0),filename,data);
+    local.push(header);
+    const directory=bytes(four(0x02014b50),two(20),two(20),two(0x0800),two(0),
+      two(0),two(0),four(crc),four(data.length),four(data.length),
+      two(filename.length),two(0),two(0),two(0),two(0),four(0),four(offset),filename);
+    central.push(directory);offset+=header.length;
+  }
+  const centralBytes=bytes(...central);
+  const end=bytes(four(0x06054b50),two(0),two(0),two(entries.length),two(entries.length),
+    four(centralBytes.length),four(offset),two(0));
+  return bytes(...local,centralBytes,end);
+}
+function sheetXml(table){
+  const col=n=>{let s="";do{s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1;}while(n>=0);return s;};
+  const rows=table.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((cell,j)=>{
+    const ref=col(j)+(i+1);
+    if(typeof cell==="number"&&Number.isFinite(cell))
+      return '<c r="'+ref+'"><v>'+cell+'</v></c>';
+    return '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+
+      esc(cell)+'</t></is></c>';
+  }).join("")+'</row>').join("");
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<sheetData>'+rows+'</sheetData></worksheet>';
+}
+function excelDownload(data,report){
+  const tabs=[
+    ["Сводка",[["Показатель","Рубли / количество"],
+      ["Выручка",report.revenue],["Оплаченные поставщики + расходы",report.spent],
+      ["Налог 6% (оценка)",report.tax],["Себестоимость проданного",report.cogs],
+      ["Расчётная прибыль",report.profit],["Долг поставщикам",report.supplierLiability],
+      ["Стоимость непроданного",report.inventoryCost],
+      ["Продано, шт.",report.quantitySold],["Без зарегистрированной себестоимости, шт.",report.unknownQty]]],
+    ["Товары",[["Товар","Slug","Получено, шт.","Продано, шт.","Выручка, ₽","Себестоимость, ₽","Долг поставщикам, ₽","Без себестоимости, шт."],
+      ...report.productRows.map(p=>[p.title,p.product_slug,p.received,p.sold,p.revenue,p.cost,p.due,p.missing])]],
+    ["Партии",[["Дата","№","Товар","Размер / цвет","Поставщик","Договор","Получено","Продано","Остаток","Цена поставщика, ₽","Начислено, ₽","Оплачено, ₽","Долг, ₽"],
+      ...report.rows.map(r=>[r.created_at,r.id,r.product_slug,r.stock_size,r.supplier,
+        r.ownership==="purchase"?"Выкуп":"Под реализацию",Number(r.quantity),r.qty_sold,
+        r.qty_left,Number(r.unit_cost),r.liability,r.paid,r.debt])]],
+    ["Продажи",[["Дата","Номер заказа","Товар","Цвет / размер","Количество","Цена продажи, ₽","Выручка, ₽"],
+      ...data.sales.map(r=>[r.updated_at,r.order_id,r.product_slug,r.size,Number(r.quantity),
+        Number(r.unit_price),Number(r.quantity)*Number(r.unit_price)])]],
+    ["Платежи",[["Дата","№ платежа","№ партии","Сумма, ₽","Комментарий"],
+      ...data.payments.map(p=>[p.created_at,p.id,p.receipt_id,Number(p.amount),p.note])]],
+    ["Расходы",[["Дата","№","Назначение","Сумма, ₽"],
+      ...data.expenses.map(e=>[e.created_at,e.id,e.reason,Number(e.amount)])]]
+  ];
+  const xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const mainNs='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const officeNs='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const packageNs='http://schemas.openxmlformats.org/package/2006/relationships';
+  const book=xml+'<workbook xmlns="'+mainNs+'" xmlns:r="'+officeNs+'"><sheets>'+
+    tabs.map((t,i)=>'<sheet name="'+esc(t[0])+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+
+    '</sheets></workbook>';
+  const contentTypes=xml+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+    '<Default Extension="xml" ContentType="application/xml"/>'+
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+    tabs.map((t,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+
+    '</Types>';
+  const workbookRels=xml+'<Relationships xmlns="'+packageNs+'">'+
+    tabs.map((t,i)=>'<Relationship Id="rId'+(i+1)+'" Type="'+officeNs+'/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")+
+    '</Relationships>';
+  const rootRels=xml+'<Relationships xmlns="'+packageNs+'"><Relationship Id="rId1" Type="'+
+    officeNs+'/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  const archive=zipStore([["[Content_Types].xml",contentTypes],["_rels/.rels",rootRels],
+    ["xl/workbook.xml",book],["xl/_rels/workbook.xml.rels",workbookRels],
+    ...tabs.map((tab,i)=>["xl/worksheets/sheet"+(i+1)+".xml",sheetXml(tab[1])])]);
+  const date=new Date().toISOString().slice(0,10);
+  return new Response(archive,{status:200,headers:{
+    "Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "Content-Disposition":'attachment; filename="five-oceans-finance-'+date+'.xlsx"',
+    "Cache-Control":"private, no-store", "X-Content-Type-Options":"nosniff"
+  }});
 }
