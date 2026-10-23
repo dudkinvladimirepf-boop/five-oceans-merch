@@ -12,6 +12,15 @@ content:
     path: data/products.json
     format: json
     list: true
+    actions:
+      - name: finance-import
+        label: Передать отмеченные товары в финансовый учёт
+        workflow: finance-import.yml
+        ref: current
+        confirm:
+          title: Передать товары в финансовую CRM?
+          message: Убедитесь, что вы сохранили новые карточки и включили «Передать в финансовый учёт». Товары не появятся на сайте или складе.
+          button: Передать
     fields:
       - name: product_id
         label: Внутренний ID товара
