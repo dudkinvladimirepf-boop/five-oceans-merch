@@ -98,6 +98,7 @@
       select.addEventListener("change",()=>input.setCustomValidity(""));
     }
   }
+  if(typeof module==="object" && module.exports)module.exports={normalize,resultsFor};
   if(typeof document==="undefined")return;
   const ready=()=>{
     connect("receipt-sku-select","receipt-sku-search","receipt-sku-suggestions",false);
