@@ -210,7 +210,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       const stockSize="v:"+v.code+"|"+size;
       return {value:JSON.stringify([p.product_id,stockSize]),label:p.title+" — "+v.label+" / "+size};
     })));
-  const receiptOpts=options(summary.rows,r=>r.id,r=>"#"+r.id+" "+(r.batch_name||"Без названия")+" · "+r.product_slug+" / "+r.stock_size+" · "+r.supplier);
+  const receiptOpts=options(summary.rows.filter(r=>Number(r.is_opening||0)!==1),r=>r.id,r=>"#"+r.id+" "+(r.batch_name||"Без названия")+" · "+r.product_slug+" / "+r.stock_size+" · "+r.supplier);
   const supplierFilter=String(filters.supplier||"");
   const batchFilter=String(filters.batch||"");
   const filteredRows=summary.rows.filter(r=>
@@ -393,7 +393,7 @@ async function perform(context,form) {
       db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) VALUES(?,?)")
         .bind(supplier,batchName),
       db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note) "+
-        "SELECT ?,?,?,?,b.id,?,?,?,?,? FROM finance_batches b WHERE b.supplier_id=? AND b.name=?")
+        "SELECT ?,?,?,?,b.id,?,?,?,? FROM finance_batches b WHERE b.supplier_id=? AND b.name=?")
         .bind(productId,product.slug,size,supplier,ownership,qty,cost,note,supplier,batchName),
       db.prepare("INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP")
         .bind(product.slug,productId,size,qty)
@@ -402,7 +402,7 @@ async function perform(context,form) {
   }
   if(action==="payment"){
     const receiptId=int(form.get("receipt_id"),1,100000000,"партия");
-    const exists=await db.prepare("SELECT id FROM finance_receipts WHERE id=?").bind(receiptId).first();
+    const exists=await db.prepare("SELECT id FROM finance_receipts WHERE id=? AND is_opening=0").bind(receiptId).first();
     if(!exists)throw Error("Партия не найдена.");
     const amount=int(form.get("amount"),1,1000000000,"сумма");
     const note=text(form.get("note")).trim().slice(0,250);
@@ -431,7 +431,7 @@ export async function onRequestGet(context){
     const query=new URL(context.request.url).searchParams;
     if(query.get("download")==="xlsx")return excelDownload(data,report);
     const catalogProducts=await catalog(context);
-    return reply(show(data,report,catalogProducts,await csrf(context.request,secret),query.get("notice")||"",""));
+    return reply(show(data,report,catalogProducts,await csrf(context.request,secret),query.get("notice")||"","",{supplier:query.get("supplier"),batch:query.get("batch")}));
   }catch(error){
     console.error("Finance GET",error);
     return reply(layout('<p class="error">Финансовая база пока недоступна: '+esc(error.message)+
@@ -521,9 +521,9 @@ function excelDownload(data,report){
       ["Продано, шт.",report.quantitySold],["Без зарегистрированной себестоимости, шт.",report.unknownQty]]],
     ["Товары",[["Товар","Slug","Цена продажи, ₽","Средняя цена поставщика, ₽","Выкуплено, шт.","Под реализацию, шт.","Продано, шт.","Выручка, ₽","Себестоимость, ₽","Долг поставщикам, ₽","Без себестоимости, шт."],
       ...report.productRows.map(p=>[p.title,p.product_slug,Number(p.list_price),p.averageCost,p.purchased,p.consignment,p.sold,p.revenue,p.cost,p.due,p.missing])]],
-    ["Партии",[["Дата","№","Товар","Размер / цвет","Поставщик","Договор","Получено","Продано","Остаток","Цена поставщика, ₽","Начислено, ₽","Оплачено, ₽","Долг, ₽"],
-      ...report.rows.map(r=>[r.created_at,r.id,r.product_slug,r.stock_size,r.supplier,
-        r.ownership==="purchase"?"Выкуп":"Под реализацию",Number(r.quantity),r.qty_sold,
+    ["Партии",[["Дата","№ записи","Внутренний № партии","Название партии","Товар","Размер / цвет","Поставщик","Договор","Получено","Продано","Остаток","Цена поставщика, ₽","Начислено, ₽","Оплачено, ₽","Долг, ₽"],
+      ...report.rows.map(r=>[r.created_at,r.id,r.batch_id||"",r.batch_name||"",r.product_slug,r.stock_size,r.supplier,
+        Number(r.is_opening||0)===1?"Начальный остаток":r.ownership==="purchase"?"Выкуп":"Под реализацию",Number(r.quantity),r.qty_sold,
         r.qty_left,Number(r.unit_cost),r.liability,r.paid,r.debt])]],
     ["Продажи",[["Дата","Номер заказа","Товар","Цвет / размер","Количество","Цена продажи, ₽","Выручка, ₽"],
       ...data.sales.map(r=>[r.updated_at,r.order_id,r.product_slug,r.size,Number(r.quantity),
