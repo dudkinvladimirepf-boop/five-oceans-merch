@@ -306,7 +306,13 @@ async function importOpening(context) {
     "FROM inventory i WHERE i.total_quantity>0 AND NOT EXISTS "+
     "(SELECT 1 FROM inventory_exclusions e WHERE e.product_slug=i.product_slug AND e.size=i.size)"
   ).all();
+  // Keep catalog SKU IDs/costs; read actual quantities inside the D1 transaction.
   const positions=[];
+  for(const p of known.values()) {
+    const cost=LEGACY_UNIT_COSTS.get(String(p.product_id).toLowerCase());
+    for(const v of p.variants||[])for(const size of v.sizes||[])
+      positions.push([p.product_id,p.slug,"v:"+v.code+"|"+size,cost]);
+  }
   for(const x of stockResult.results||[]){
     const p=known.get(x.product_slug);
     if(!p)continue; // Goods absent from the current published catalog are not imported.
@@ -316,8 +322,6 @@ async function importOpening(context) {
     const qty=Number(x.total_quantity),reserved=Number(x.reserved_quantity);
     if(!Number.isSafeInteger(qty)||qty<1||!Number.isSafeInteger(reserved)||reserved<0||reserved>qty)
       throw Error("Некорректные складские количества: "+p.title+" / "+x.size);
-    const cost=LEGACY_UNIT_COSTS.get(String(p.product_id).toLowerCase());
-    positions.push([p.product_id,p.slug,x.size,qty,cost]);
   }
   const products=[...known.values()].map(p=>[
     p.product_id,p.slug,p.title,Number(p.price||0)]);
@@ -325,7 +329,13 @@ async function importOpening(context) {
     throw Error("Некорректная цена продажи в Pages.");
   const statements=[
     // Uniqueness of legacy-v1 makes the whole batch fail atomically on races.
-    db.prepare("INSERT INTO finance_opening_state(id,stock_lines) VALUES('legacy-v1',?)").bind(positions.length),
+    db.prepare("INSERT INTO finance_opening_state(id,stock_lines) "+
+      "SELECT 'legacy-v1',COUNT(*) FROM inventory i "+
+      "JOIN json_each(?) x ON i.product_slug=json_extract(x.value,'$[1]') "+
+      "AND i.size=json_extract(x.value,'$[2]') "+
+      "WHERE i.total_quantity>0 AND NOT EXISTS "+
+      "(SELECT 1 FROM inventory_exclusions e WHERE e.product_slug=i.product_slug AND e.size=i.size)"
+    ).bind(JSON.stringify(positions)),
     db.prepare("INSERT INTO finance_products (product_id,product_slug,title,list_price) "+
       "SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),json_extract(value,'$[3]') "+
       "FROM json_each(?) WHERE 1 ON CONFLICT(product_id) DO UPDATE SET "+
@@ -338,14 +348,19 @@ async function importOpening(context) {
   if(positions.length) statements.push(
     db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note,is_opening) "+
       "SELECT json_extract(x.value,'$[0]'),json_extract(x.value,'$[1]'),json_extract(x.value,'$[2]'),"+
-      "s.id,b.id,'purchase',json_extract(x.value,'$[3]'),json_extract(x.value,'$[4]'),'Первичный перенос из CRM; без движения склада',1 "+
-      "FROM json_each(?) x CROSS JOIN finance_suppliers s JOIN finance_batches b "+
-      "ON b.supplier_id=s.id AND b.name=? WHERE s.name=?"
+      "s.id,b.id,'purchase',i.total_quantity,json_extract(x.value,'$[3]'),'Первичный перенос из CRM; без движения склада',1 "+
+      "FROM json_each(?) x JOIN inventory i ON i.product_slug=json_extract(x.value,'$[1]') "+
+      "AND i.size=json_extract(x.value,'$[2]') "+
+      "CROSS JOIN finance_suppliers s JOIN finance_batches b "+
+      "ON b.supplier_id=s.id AND b.name=? WHERE s.name=? AND i.total_quantity>0 "+
+      "AND NOT EXISTS (SELECT 1 FROM inventory_exclusions e "+
+      "WHERE e.product_slug=i.product_slug AND e.size=i.size)"
     ).bind(JSON.stringify(positions),LEGACY_BATCH_NAME,LEGACY_SUPPLIER_NAME)
   );
   await db.batch(statements);
-  return "Начальный перенос выполнен: "+products.length+" товаров и "+positions.length+
-    " складских позиций. Остатки не изменялись; долг поставщику не начислялся.";
+  return "Начальный перенос выполнен: "+products.length+
+    " товаров. Складские позиции с положительным остатком перенесены по фактическим значениям D1. "+
+    "Остатки не изменялись; долг поставщику не начислялся.";
 }
 
 async function perform(context,form) {
