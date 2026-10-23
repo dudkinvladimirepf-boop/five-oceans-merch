@@ -319,7 +319,7 @@ function showTestCleanup(s,token){
     (guard?'':formStart("test-cleanup",token)+
     '<label><input type="checkbox" name="test_cleanup_backup_confirm" value="yes" required style="width:auto"> Резервная копия сохранена, контрольная точка D1 проверена</label>'+
     '<label>Для подтверждения напечатайте: УДАЛИТЬ ТЕСТ CRM<input name="test_cleanup_confirmation" required autocomplete="off"></label>'+
-    '<button type="submit" onclick="return confirm(\'Удалить тестовые заказы, финансовые партии и остатки товара test_crm?\')">Удалить только ТЕСТ CRM</button></form>')+
+    '<button type="submit">Удалить только ТЕСТ CRM</button></form>')+
     '</div>';
 }
 
