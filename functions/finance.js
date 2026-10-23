@@ -157,31 +157,99 @@ function calculate(data) {
 }
 
 function layout(content,title="Финансы") {
-  return '<!doctype html><html lang="ru"><head><meta charset="utf-8">'+
-  '<meta name="viewport" content="width=device-width,initial-scale=1">'+
-  '<meta name="robots" content="noindex,nofollow"><title>'+esc(title)+' — 5 океанов</title>'+
-  '<style>*{box-sizing:border-box}body{background:#f3f6fa;color:#122b44;font-family:Arial,sans-serif;margin:0}'+
-  'main{max-width:1200px;margin:24px auto;padding:0 18px 60px}a{color:#125e87}h1{font-size:29px}'+
-  'h2{margin-top:30px;font-size:20px}.nav{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0 24px}'+
-  '.box{background:white;border:1px solid #dbe4ee;border-radius:14px;padding:19px;margin:15px 0}'+
-  '.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}'+
-  '.stat{background:#fff;border:1px solid #e0e6ee;border-radius:12px;padding:17px}.stat b{display:block;font-size:23px;margin-top:7px}'+
-  '.muted{color:#61738b;font-size:13px;line-height:1.6}.warn{padding:12px;background:#fff2e0;border:1px solid #dfc29a;border-radius:8px}'+
-  '.ok{background:#e7f7e9;padding:12px;border-radius:8px}.error{background:#ffe9eb;padding:12px;border-radius:8px}'+
-  'table{width:100%;border-collapse:collapse;min-width:650px;font-size:13px}th,td{border-bottom:1px solid #e0e8f0;padding:10px;text-align:left}'+
-  '.scroll{overflow-x:auto}th{background:#f0f4f8}.forms{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px}'+
-  'label{display:block;margin:10px 0 4px;font-size:13px}input,select{width:100%;padding:10px;border:1px solid #c2d0e0;border-radius:8px;background:white}'+
-  'button,.btn{border:0;background:#e30613;color:white;padding:11px 16px;border-radius:8px;font-weight:700;cursor:pointer;display:inline-block;text-decoration:none;margin-top:12px}'+
-  '.btn-secondary{background:#154e7a}.pill{padding:4px 7px;border-radius:12px;background:#e9edf4;font-size:11px}'+
-  '.combobox{position:relative}.suggestions{position:relative;background:#fff;border:1px solid #d3dfea;border-radius:8px;max-height:210px;overflow-y:auto;margin-top:4px}'+
-  '.suggestions[hidden]{display:none}.suggestions button{display:block;width:100%;text-align:left;margin:0;border:0;border-radius:0;background:white;color:#122b44;font-weight:normal;font-size:13px;padding:10px}'+
-  '.suggestions button:hover,.suggestions button:focus{background:#e9f2ff;outline:2px solid #adcbea}.field-help{font-size:12px;color:#506982;margin:5px 0}'+
-  '@media(max-width:600px){h1{font-size:23px}.box{padding:12px}}</style></head><body><main>'+
-  '<h1>Финансовый учёт мерча</h1><nav class="nav"><a href="/developers?tab=stock">Склад</a>'+
-  '<a href="/developers?tab=orders">Заказы</a><a href="/finance">Финансы</a>'+
-  '<a href="/finance?download=xlsx">Скачать Excel (.xlsx)</a><a href="/">Сайт</a></nav>'+
-  content+'</main><script src="/finance-forms.js" defer></script></body></html>';
+  // Shared visual language with /developers: navy site header, white card,
+  // same four CRM tabs. All user/business data continues to live in content.
+  return `<!doctype html><html lang="ru"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>${esc(title)} — 5 океанов</title>
+  <style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,sans-serif;background:#f5f7fa;color:#14283a}
+  .crm-header{background:#102c43;padding:22px 5%;color:#fff}
+  .crm-header-inner{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+  .crm-header a{color:#fff;text-decoration:none}
+  .crm-brand{font-size:20px;font-weight:700}
+  .crm-home{font-size:14px;font-weight:700;padding:9px 13px;border:1px solid rgba(255,255,255,.5);border-radius:8px}
+  .crm-home:hover{background:rgba(255,255,255,.13)}
+  main{max-width:1250px;margin:48px auto;padding:20px}
+  .crm-card{background:#fff;border-radius:16px;padding:30px;box-shadow:0 5px 25px #102c4312}
+  h1{font-size:28px;margin:0 0 15px}
+  h2{font-size:24px;margin:30px 0 18px}
+  h3{font-size:19px;margin:0 0 15px}
+  h4{font-size:16px;margin:23px 0 12px}
+  .admin-tabs{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:22px 0 25px;padding-bottom:14px;border-bottom:1px solid #dce6ee}
+  .admin-tabs a{display:inline-flex;align-items:center;gap:7px;padding:11px 15px;border-radius:9px;border:1px solid #dce6ee;background:#f5f7fa;text-decoration:none;color:#435c70;font-weight:700;font-size:14px}
+  .admin-tabs a.active{background:#102c43;color:#fff;border-color:#102c43}
+  .admin-tabs a:hover:not(.active){background:#eaf1f6}
+  .finance-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin:7px 0 23px}
+  .finance-heading h2{margin:0}
+  a{color:#146789}
+  .box{background:#fff;border:1px solid #e0e7ed;border-radius:12px;padding:25px;margin:25px 0}
+  .box h2:first-child{margin-top:0}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin:20px 0 30px}
+  .stat{padding:20px;background:#f5f7fa;border-radius:12px}
+  .stat b{display:block;font-size:27px;margin-top:10px;overflow-wrap:anywhere}
+  .muted{color:#71808e;font-size:14px;line-height:1.6}
+  .warn{padding:13px 16px;background:#fff6df;border:1px solid #efdfb8;border-radius:9px}
+  .ok{background:#eaf7ee;color:#28734a;padding:13px 16px;border-radius:9px}
+  .error{background:#fff0f0;color:#a03b3b;padding:13px 16px;border-radius:9px}
+  table{width:100%;border-collapse:collapse;min-width:650px;font-size:14px}
+  th,td{border-bottom:1px solid #e8edf1;padding:14px 10px;text-align:left}
+  th{font-size:12px;color:#71808e}
+  td small{display:block;margin-top:5px;color:#93a0aa;word-break:break-all}
+  .scroll{overflow-x:auto}
+  .forms{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px}
+  label{display:block;margin:16px 0 6px;font-size:14px;font-weight:700}
+  input,select{width:100%;padding:11px;border:1px solid #cbd5df;border-radius:8px;background:white;color:#14283a;font:inherit;font-size:14px}
+  input[type=checkbox]{width:auto}
+  button,.btn{border:0;background:#146789;color:#fff;padding:11px 15px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;display:inline-block;text-decoration:none;margin-top:12px}
+  button:hover,.btn:hover{background:#10516d;color:#fff}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .btn-secondary{background:#154e7a}
+  .danger-button{background:#b53636}
+  .danger-button:hover{background:#972d2d}
+  .pill{padding:4px 7px;border-radius:12px;background:#e9edf4;font-size:11px}
+  .combobox{position:relative}
+  .suggestions{position:relative;background:#fff;border:1px solid #d3dfea;border-radius:8px;max-height:210px;overflow-y:auto;margin-top:4px}
+  .suggestions[hidden]{display:none}
+  .suggestions button{display:block;width:100%;text-align:left;margin:0;border:0;border-radius:0;background:white;color:#122b44;font-weight:normal;font-size:13px;padding:10px}
+  .suggestions button:hover,.suggestions button:focus{background:#e9f2ff;color:#122b44;outline:2px solid #adcbea}
+  .field-help{font-size:12px;color:#506982;margin:5px 0}
+  @media(max-width:650px){
+    main{margin:20px auto;padding:12px}
+    .crm-card{padding:18px}
+    h1{font-size:24px}
+    h2{font-size:21px}
+    .box{padding:15px}
+    .stat{padding:12px}
+    .stat b{font-size:23px}
+  }
+  </style></head><body>
+  <header class="crm-header">
+    <div class="crm-header-inner">
+      <a href="/" class="crm-brand" aria-label="На главную страницу магазина">5 ОКЕАНОВ</a>
+      <a href="/" class="crm-home">← На главную сайта</a>
+    </div>
+  </header>
+  <main><div class="crm-card">
+    <h1>Для разработчиков</h1>
+    <nav class="admin-tabs" aria-label="Разделы CRM">
+      <a href="/developers?tab=orders">Заявки и заказы</a>
+      <a href="/developers?tab=stock">Склад</a>
+      <a href="/finance" class="active" aria-current="page">Финансы</a>
+      <a href="/developers?tab=trash">Корзина товаров</a>
+    </nav>
+    <div class="finance-heading">
+      <h2>Финансовый учёт мерча</h2>
+      <a class="btn btn-secondary" href="/finance?download=xlsx">Скачать Excel (.xlsx)</a>
+    </div>
+    ${content}
+  </div></main>
+  <script src="/finance-forms.js" defer></script>
+  </body></html>`;
 }
+
 function formStart(action,token){
   return '<form method="POST" action="/finance">'+
   '<input type="hidden" name="action" value="'+esc(action)+'">'+
@@ -319,7 +387,7 @@ function showTestCleanup(s,token){
     (guard?'':formStart("test-cleanup",token)+
     '<label><input type="checkbox" name="test_cleanup_backup_confirm" value="yes" required style="width:auto"> Резервная копия сохранена, контрольная точка D1 проверена</label>'+
     '<label>Для подтверждения напечатайте: УДАЛИТЬ ТЕСТ CRM<input name="test_cleanup_confirmation" required autocomplete="off"></label>'+
-    '<button type="submit">Удалить только ТЕСТ CRM</button></form>')+
+    '<button type="submit" class="danger-button">Удалить только ТЕСТ CRM</button></form>')+
     '</div>';
 }
 
