@@ -272,6 +272,11 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<p class="muted">Одно подтверждение записывает поступление, поставщика, новую партию, фактическую оплату и расходы. Неоплаченные суммы и расходы можно оставить пустыми. Склад увеличивается только после успешного сохранения всей операции.</p>'+
       '<h4>1. Что получили и от кого</h4>'+
       formStart("receipt",token)+
+      '<label for="finance-operation-mode">Что оформляем?</label>'+
+      '<select id="finance-operation-mode" name="operation_mode">'+
+      '<option value="receipt">Новое поступление (товар + оплата + расходы)</option>'+
+      '<option value="settlement">Доплата / отдельный расход без нового поступления</option></select>'+
+      '<div id="receipt-main-fields">'+
       '<label for="receipt-sku-select">Товар, цвет и размер — выбрать из списка</label>'+
       '<select id="receipt-sku-select" name="sku" required>'+
       '<option value="">— Выберите товар, цвет и размер —</option>'+
@@ -293,8 +298,15 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<label>Количество<input name="quantity" type="number" min="1" max="1000000" required></label>'+
       '<label>Закупочная цена / выплата за штуку (₽)<input name="unit_cost" type="number" min="0" max="100000000" required></label>'+
       '<label>Примечание к поступлению<input name="note" maxlength="250"></label>'+
+      '</div>'+
+      '<div id="existing-receipt-select" hidden>'+
+      '<label for="finance-existing-receipt">Ранее оформленная партия для доплаты</label>'+
+      '<select id="finance-existing-receipt" name="receipt_id" disabled>'+
+      '<option value="">— Только расход (без платежа) —</option>'+
+      receiptOpts+'</select>'+
+      '<p class="field-help">Если это доплата, выбери нужное поступление. Если нужно учесть только самостоятельный расход, оставь партию пустой.</p></div>'+
       '<h4>2. Оплата поставщику — необязательно</h4>'+
-      '<p class="muted">Если пока не платили — оставь сумму пустой. Если заплатили при получении — укажи фактическую сумму. Платёж автоматически привяжется к этой партии, а не к другой.</p>'+
+      '<p class="muted">Если пока не платили — оставь сумму пустой. При новом поступлении платёж привязывается к нему, при доплате — к выбранной ранее партии.</p>'+
       '<div class="forms"><label>Уже выплачено поставщику (₽)<input name="payment_amount" type="number" min="0" max="1000000000" placeholder="Не оплачивали — оставить пустым"></label>'+
       '<label>Комментарий к оплате<input name="payment_note" maxlength="250" placeholder="Например, банковский перевод"></label></div>'+
       '<h4>3. Прочие расходы — необязательно</h4>'+
@@ -305,7 +317,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '</div>'+
       '<button type="button" id="add-receipt-expense" class="btn-secondary">+ Ещё расход</button>'+
       '<p class="field-help">Проверь все суммы и количество до подтверждения. Это единая операция, отдельно сохранять каждый блок не нужно.</p>'+
-      '<button type="submit" id="confirm-receipt" '+(!catalogOptions.length?'disabled':'')+'>Подтвердить поступление и расчёты</button>'+
+      '<button type="submit" id="confirm-receipt" '+(!catalogOptions.length?'disabled':'')+'>Подтвердить операцию</button>'+
       '</form></div>';
   html+='<div class="box"><h2>Поступления и расчёты</h2>'+
     '<form method="GET" action="/finance"><div class="forms">'+
@@ -474,6 +486,30 @@ function receiptExtras(form){
   return {payment,paymentNote,expenses};
 }
 
+async function settleExisting(db,form){
+  const extras=receiptExtras(form);
+  if(!extras.payment&&!extras.expenses.length)
+    throw Error("Укажи сумму доплаты или хотя бы один расход.");
+  let target=null;
+  if(extras.payment){
+    const receiptId=int(form.get("receipt_id"),1,100000000,"номер поступления");
+    target=await db.prepare("SELECT id FROM finance_receipts WHERE id=? AND is_opening=0")
+      .bind(receiptId).first();
+    if(!target)throw Error("Выбранная партия не найдена или не допускает доплаты.");
+  }
+  const statements=[];
+  if(extras.payment)statements.push(db.prepare(
+    "INSERT INTO finance_supplier_payments(receipt_id,amount,note) VALUES(?,?,?)"
+  ).bind(target.id,extras.payment,extras.paymentNote));
+  for(const expense of extras.expenses)statements.push(db.prepare(
+    "INSERT INTO finance_expenses(reason,amount) VALUES(?,?)"
+  ).bind(expense.reason,expense.amount));
+  await db.batch(statements);
+  return "Дополнительная операция сохранена: "+
+    (extras.payment?"оплата поставщику "+money(extras.payment)+"; ":"")+
+    "прочих расходов "+extras.expenses.length+". Склад не менялся.";
+}
+
 async function perform(context,form) {
   const db=context.env.DB, action=text(form.get("action"));
   if(action==="opening-import")return importOpening(context);
@@ -493,6 +529,9 @@ async function perform(context,form) {
     return "Поставщик сохранён.";
   }
   if(action==="receipt"){
+    const mode=text(form.get("operation_mode")||"receipt");
+    if(mode==="settlement")return settleExisting(db,form);
+    if(mode!=="receipt")throw Error("Неизвестный режим операции.");
     const raw=text(form.get("sku"));let sku;
     try{sku=JSON.parse(raw)}catch{throw Error("Неверный товар / размер.");}
     if(!Array.isArray(sku)||sku.length!==2)throw Error("Неверная комбинация товара и размера.");
