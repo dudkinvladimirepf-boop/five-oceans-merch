@@ -7,6 +7,8 @@
     "design": "Вышитый логотип Клуба «5 океанов»",
     "price": 2600,
     "category": "свитшоты",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -48,9 +50,7 @@
         "featured": false,
         "new_arrival": false
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "d233280c-ab61-41e7-a3bd-c7682b38bc81",
@@ -60,6 +60,8 @@
     "design": "Вышитый логотип Клуба «5 океанов»",
     "price": 3800,
     "category": "свитшоты",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -83,9 +85,7 @@
         "featured": false,
         "new_arrival": false
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "2114867b-3c44-483f-9c45-d5acea342836",
@@ -95,6 +95,8 @@
     "design": "Логотип Клуба «5 океанов» спереди, парусник на волнах на спине",
     "price": 1900,
     "category": "футболки",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "white",
@@ -119,9 +121,7 @@
         "featured": false,
         "new_arrival": false
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "63ab85af-1303-44c0-b588-f482f1b251a7",
@@ -131,6 +131,8 @@
     "design": "Цитата О. Дудкина «Я всегда пишу „Океан“ с большой буквы»",
     "price": 1900,
     "category": "футболки",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -153,9 +155,7 @@
         "featured": false,
         "new_arrival": true
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "1cab5aa8-9717-4756-88e7-317ba95dc9be",
@@ -165,6 +165,8 @@
     "design": "Цитата Ф. Конюхова «Мир держится на людях, которые не живут как все»",
     "price": 1900,
     "category": "футболки",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -188,9 +190,7 @@
         "featured": true,
         "new_arrival": true
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "c6e83d8c-ab0a-42d4-a7dc-dbb1607a938e",
@@ -200,6 +200,8 @@
     "design": "Цитата Ж.-И. Кусто «Если у человека появляется возможность вести необычную жизнь, он не имеет права от неё отказываться»",
     "price": 1900,
     "category": "футболки",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -221,9 +223,7 @@
         "featured": true,
         "new_arrival": true
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "f74d03ce-a0aa-4f04-a738-c60a9221cec1",
@@ -233,6 +233,8 @@
     "design": "Цитата Ж.-И. Кусто «Успешными бывают только невыполнимые задачи»",
     "price": 1900,
     "category": "футболки",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -253,9 +255,7 @@
         "featured": false,
         "new_arrival": true
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "056aca62-9e79-4fa3-8d0b-647f35f30402",
@@ -265,6 +265,8 @@
     "design": "Цитата О. Дудкина «Кто такие яхтсмены? Это уставшие альпинисты»",
     "price": 1900,
     "category": "футболки",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -288,9 +290,7 @@
         "featured": false,
         "new_arrival": false
       }
-    ],
-    "published": true,
-    "finance_enabled": false
+    ]
   },
   {
     "product_id": "6fa7f415-e6e3-4b9d-b408-e8cc0da44cf7",
@@ -300,6 +300,8 @@
     "design": "Сине-белая полосатая шапка с фирменной нашивкой Клуба «5 океанов»",
     "price": 1100,
     "category": "головные-уборы",
+    "published": true,
+    "finance_enabled": false,
     "variants": [
       {
         "code": "navy-white",
@@ -319,8 +321,29 @@
         "featured": true,
         "new_arrival": true
       }
-    ],
+    ]
+  },
+  {
+    "product_id": "b3ec1243-b170-4d8c-94b6-2a7feef4b9fe",
+    "title": "ТЕСТ CRM — удалить после проверки",
+    "slug": "test_crm",
+    "design": "ТЕСТ CRM — удалить после проверки",
+    "price": 100,
+    "category": "аксессуары",
     "published": true,
-    "finance_enabled": false
+    "finance_enabled": true,
+    "variants": [
+      {
+        "code": "black",
+        "label": "черный",
+        "hex": "#142448",
+        "sizes": [
+          "Без размера"
+        ],
+        "available": true,
+        "featured": true,
+        "new_arrival": true
+      }
+    ]
   }
 ]
