@@ -684,7 +684,7 @@ async function loadProduct() {
     }
 
     const product = products.find(
-      p => p.slug === productSlug
+      p => p.slug === productSlug && p.published === true
     );
 
     if (!product) {
