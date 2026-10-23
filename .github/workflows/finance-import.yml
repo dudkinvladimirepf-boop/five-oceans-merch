@@ -28,7 +28,7 @@ jobs:
           }
           const products = JSON.parse(fs.readFileSync("data/products.json","utf8"));
           const marked = products.filter(p => p.finance_enabled === true)
-            .map(({ product_id, slug, title }) => ({ product_id, slug, title }));
+            .map(({ product_id, slug, title, price }) => ({ product_id, slug, title, price }));
           if (!marked.length) {
             console.log("No marked products found in Pages CMS.");
             process.exit(0);
