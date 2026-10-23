@@ -11,10 +11,7 @@ content:
     type: file
     path: data/products.json
     format: json
-    list:
-      collapsible:
-        collapsed: true
-        summary: "{title}"
+    list: true
     actions:
       - name: finance-import
         label: Передать отмеченные товары в финансовый учёт
