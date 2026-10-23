@@ -60,7 +60,7 @@ async function catalog(context) {
 
 async function records(db) {
   const [products,suppliers,receipts,payments,expenses,sales]=await Promise.all([
-    db.prepare("SELECT product_id,product_slug,title FROM finance_products ORDER BY title").all(),
+    db.prepare("SELECT product_id,product_slug,title,list_price FROM finance_products ORDER BY title").all(),
     db.prepare("SELECT id,name FROM finance_suppliers ORDER BY name").all(),
     db.prepare("SELECT r.*,s.name AS supplier FROM finance_receipts r JOIN finance_suppliers s ON s.id=r.supplier_id ORDER BY r.id").all(),
     db.prepare("SELECT id,receipt_id,amount,note,created_at FROM finance_supplier_payments ORDER BY id").all(),
@@ -83,12 +83,12 @@ function calculate(data) {
     lots.get(key).push(r);
   }
   const products=new Map(data.products.map(p=>[p.product_slug,{
-    ...p, received:0, sold:0, revenue:0, cost:0, due:0, missing:0
+    ...p, received:0, purchased:0, consignment:0, costTotal:0, averageCost:0, sold:0, revenue:0, cost:0, due:0, missing:0
   }]));
   let revenue=0, cogs=0, quantitySold=0, unknownQty=0;
   for(const r of data.receipts){
     const p=products.get(r.product_slug);
-    if(p)p.received+=Number(r.quantity);
+    if(p){p.received+=Number(r.quantity);p.costTotal+=Number(r.quantity)*Number(r.unit_cost);if(r.ownership==="purchase")p.purchased+=Number(r.quantity);else p.consignment+=Number(r.quantity);}
   }
   for(const row of data.sales){
     const qty=Number(row.quantity), income=qty*Number(row.unit_price);
@@ -108,6 +108,7 @@ function calculate(data) {
     }
     if(rest){unknownQty+=rest;if(p)p.missing+=rest;}
   }
+  for(const p of products.values()){p.averageCost=p.received?p.costTotal/p.received:0;}
   let supplierLiability=0, inventoryCost=0, supplierPayments=0;
   const receipts=data.receipts.map(r=>{
     const received=Number(r.quantity),sold=Number(consumed.get(r.id)||0);
@@ -180,8 +181,8 @@ function show(data,summary,products,token,notice,error) {
     '<p class="muted">В Pages CMS отметьте «Передать в финансовый учёт», сохраните карточку и нажмите кнопку ниже. '+ 
     'Само добавление в финансовый учёт не создаёт складскую позицию и не публикует товар.</p>'+
     formStart("import",token)+'<button type="submit" class="btn-secondary">Синхронизировать товары из Pages CMS</button></form>'+
-    '<div class="scroll"><table><tr><th>Товар</th><th>Получено</th><th>Продано</th><th>Выручка</th><th>Себестоимость</th><th>Долг поставщику</th><th>Без себестоимости</th></tr>'+
-    summary.productRows.map(p=>'<tr><td>'+esc(p.title)+'<br><small>'+esc(p.product_slug)+'</small></td><td>'+p.received+'</td>'+
+    '<div class="scroll"><table><tr><th>Товар</th><th>Цена продажи</th><th>Средняя цена поставщика</th><th>Выкуплено</th><th>Под реализацию</th><th>Продано</th><th>Выручка</th><th>Себестоимость</th><th>Долг поставщику</th><th>Без себестоимости</th></tr>'+
+    summary.productRows.map(p=>'<tr><td>'+esc(p.title)+'<br><small>'+esc(p.product_slug)+'</small></td><td>'+money(p.list_price)+'</td><td>'+money(p.averageCost)+'</td><td>'+p.purchased+'</td><td>'+p.consignment+'</td>'+
       '<td>'+p.sold+'</td><td>'+money(p.revenue)+'</td><td>'+money(p.cost)+'</td><td>'+money(p.due)+'</td>'+
       '<td>'+p.missing+'</td></tr>').join("")+'</table></div></div>';
   const supplierOptions=options(data.suppliers,x=>x.id,x=>x.name);
@@ -236,9 +237,9 @@ async function perform(context,form) {
   if(action==="import"){
     const items=(await catalog(context)).filter(p=>p.finance_enabled===true &&
       /^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(text(p.product_id)) && p.slug && p.title)
-      .map(p=>[p.product_id,p.slug,p.title]);
+      .map(p=>[p.product_id,p.slug,p.title,Number(p.price||0)]);
     if(!items.length)throw Error("В Pages CMS пока нет товаров с включённым финансовым учётом.");
-    await db.prepare("INSERT INTO finance_products (product_id,product_slug,title) SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]') FROM json_each(?) WHERE 1 ON CONFLICT(product_id) DO UPDATE SET product_slug=excluded.product_slug,title=excluded.title,updated_at=CURRENT_TIMESTAMP").bind(JSON.stringify(items)).run();
+    await db.prepare("INSERT INTO finance_products (product_id,product_slug,title,list_price) SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),json_extract(value,'$[3]') FROM json_each(?) WHERE 1 ON CONFLICT(product_id) DO UPDATE SET product_slug=excluded.product_slug,title=excluded.title,list_price=excluded.list_price,updated_at=CURRENT_TIMESTAMP").bind(JSON.stringify(items)).run();
     return "Синхронизировано товаров в финансовом учёте: "+items.length+".";
   }
   if(action==="supplier"){
@@ -396,8 +397,8 @@ function excelDownload(data,report){
       ["Расчётная прибыль",report.profit],["Долг поставщикам",report.supplierLiability],
       ["Стоимость непроданного",report.inventoryCost],
       ["Продано, шт.",report.quantitySold],["Без зарегистрированной себестоимости, шт.",report.unknownQty]]],
-    ["Товары",[["Товар","Slug","Получено, шт.","Продано, шт.","Выручка, ₽","Себестоимость, ₽","Долг поставщикам, ₽","Без себестоимости, шт."],
-      ...report.productRows.map(p=>[p.title,p.product_slug,p.received,p.sold,p.revenue,p.cost,p.due,p.missing])]],
+    ["Товары",[["Товар","Slug","Цена продажи, ₽","Средняя цена поставщика, ₽","Выкуплено, шт.","Под реализацию, шт.","Продано, шт.","Выручка, ₽","Себестоимость, ₽","Долг поставщикам, ₽","Без себестоимости, шт."],
+      ...report.productRows.map(p=>[p.title,p.product_slug,Number(p.list_price),p.averageCost,p.purchased,p.consignment,p.sold,p.revenue,p.cost,p.due,p.missing])]],
     ["Партии",[["Дата","№","Товар","Размер / цвет","Поставщик","Договор","Получено","Продано","Остаток","Цена поставщика, ₽","Начислено, ₽","Оплачено, ₽","Долг, ₽"],
       ...report.rows.map(r=>[r.created_at,r.id,r.product_slug,r.stock_size,r.supplier,
         r.ownership==="purchase"?"Выкуп":"Под реализацию",Number(r.quantity),r.qty_sold,
