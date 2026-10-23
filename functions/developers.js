@@ -1043,7 +1043,7 @@ async function syncCatalog(context) {
     usedIds.set(id, slug);
     usedSlugs.set(slug, id);
     for (const size of sizesOf(product)) {
-      positions.push({ slug, id, size });
+      if (product.published === true) positions.push({ slug, id, size });
     }
   }
 
@@ -1074,7 +1074,15 @@ async function syncCatalog(context) {
     if (id) excludedIdSizes.add(idSizeKey(id, size));
   }
 
+  // Drafts never create stock on sync, but rows already received manually
+  // are not archived merely because the product is hidden from the store.
+  const draftPairs = new Set(products.filter(p => p.published !== true)
+    .flatMap(p => sizesOf(p).map(size => pairKey(p.slug, size))));
   const wanted = new Set(positions.map(p => pairKey(p.slug, p.size)));
+  for (const row of stored) {
+    const key = pairKey(String(row.product_slug), String(row.size || ""));
+    if (draftPairs.has(key)) wanted.add(key);
+  }
   const renames = [];
   const links = [];
   const creates = [];
