@@ -267,9 +267,10 @@ function show(data,summary,products,token,notice,error,filters={}) {
      formStart("opening-import",token)+
      '<button type="submit" class="btn-secondary">Перенести существующие товары и остатки (один раз)</button></form>')+
      '</div>';
-  html+='<h2>Добавить операцию</h2><div class="forms">'+
-    '<div class="box"><h3>Поступление на склад</h3>'+
-      '<p class="muted">И для первой приёмки, и для пополнения старых товаров. При подтверждении количество автоматически увеличится в CRM. Публикация товара на сайте управляется в Pages отдельно.</p>'+
+  html+='<h2>Добавить операцию</h2>'+
+    '<div class="box"><h3>Единое оформление поступления</h3>'+
+      '<p class="muted">Одно подтверждение записывает поступление, поставщика, новую партию, фактическую оплату и расходы. Неоплаченные суммы и расходы можно оставить пустыми. Склад увеличивается только после успешного сохранения всей операции.</p>'+
+      '<h4>1. Что получили и от кого</h4>'+
       formStart("receipt",token)+
       '<label for="receipt-sku-select">Товар, цвет и размер — выбрать из списка</label>'+
       '<select id="receipt-sku-select" name="sku" required>'+
@@ -291,17 +292,21 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<option value="consignment">Под реализацию</option></select></label>'+
       '<label>Количество<input name="quantity" type="number" min="1" max="1000000" required></label>'+
       '<label>Закупочная цена / выплата за штуку (₽)<input name="unit_cost" type="number" min="0" max="100000000" required></label>'+
-      '<label>Примечание<input name="note" maxlength="250"></label>'+
-      '<button '+(!catalogOptions.length?'disabled':'')+'>Подтвердить приёмку</button></form></div>'+
-    '<div class="box"><h3>Оплата поставщику</h3>'+formStart("payment",token)+
-      '<label>Партия<select name="receipt_id">'+receiptOpts+'</select></label>'+
-      '<label>Выплачено (₽)<input name="amount" type="number" min="1" required></label>'+
-      '<label>Примечание<input name="note" maxlength="250"></label>'+
-      '<button '+(!receiptOpts?'disabled':'')+'>Записать оплату</button></form></div>'+
-    '<div class="box"><h3>Прочий расход</h3>'+formStart("expense",token)+
-      '<label>Назначение<input name="reason" maxlength="250" required></label>'+
-      '<label>Сумма (₽)<input name="amount" type="number" min="1" required></label>'+
-      '<button>Записать расход</button></form></div></div>';
+      '<label>Примечание к поступлению<input name="note" maxlength="250"></label>'+
+      '<h4>2. Оплата поставщику — необязательно</h4>'+
+      '<p class="muted">Если пока не платили — оставь сумму пустой. Если заплатили при получении — укажи фактическую сумму. Платёж автоматически привяжется к этой партии, а не к другой.</p>'+
+      '<div class="forms"><label>Уже выплачено поставщику (₽)<input name="payment_amount" type="number" min="0" max="1000000000" placeholder="Не оплачивали — оставить пустым"></label>'+
+      '<label>Комментарий к оплате<input name="payment_note" maxlength="250" placeholder="Например, банковский перевод"></label></div>'+
+      '<h4>3. Прочие расходы — необязательно</h4>'+
+      '<p class="muted">Доставка, упаковка и другие расходы, уже понесённые по этой приёмке. Можно добавить несколько строк; пустые не сохраняются.</p>'+
+      '<div id="receipt-expenses">'+
+      '<div class="forms expense-line"><label>Назначение расхода<input name="expense_reason" maxlength="250" placeholder="Например, доставка"></label>'+
+      '<label>Сумма расхода (₽)<input name="expense_amount" type="number" min="1" max="1000000000" placeholder="Если нет расходов — оставить пустым"></label></div>'+
+      '</div>'+
+      '<button type="button" id="add-receipt-expense" class="btn-secondary">+ Ещё расход</button>'+
+      '<p class="field-help">Проверь все суммы и количество до подтверждения. Это единая операция, отдельно сохранять каждый блок не нужно.</p>'+
+      '<button type="submit" id="confirm-receipt" '+(!catalogOptions.length?'disabled':'')+'>Подтвердить поступление и расчёты</button>'+
+      '</form></div>';
   html+='<div class="box"><h2>Поступления и расчёты</h2>'+
     '<form method="GET" action="/finance"><div class="forms">'+
     '<label>Поставщик<select name="supplier"><option value="">Все поставщики</option>'+
@@ -443,6 +448,32 @@ async function resolveSupplierName(db,input,legacyId){
   return match?String(match.name):raw;
 }
 
+function optionalMoney(value,title){
+  const raw=text(value).trim();
+  return raw==="" ? 0 : int(raw,0,1000000000,title);
+}
+function receiptExtras(form){
+  const payment=optionalMoney(form.get("payment_amount"),"оплата поставщику");
+  const paymentNote=text(form.get("payment_note")).trim();
+  if(paymentNote.length>250)throw Error("Комментарий к оплате слишком длинный.");
+  if(!payment && paymentNote)throw Error("Укажи сумму оплаты или удали комментарий к ней.");
+  const reasons=form.getAll("expense_reason").map(v=>text(v).trim());
+  const amounts=form.getAll("expense_amount").map(v=>text(v).trim());
+  // A malicious/malformed request must not silently drop extra rows.
+  if(reasons.length!==amounts.length || reasons.length>10)
+    throw Error("Некорректный список расходов (максимум 10).");
+  const expenses=[];
+  for(let i=0;i<reasons.length;i++){
+    const reason=reasons[i],raw=amounts[i];
+    if(!reason&&!raw)continue;
+    if(!reason||reason.length>250||!raw)
+      throw Error("Для каждого расхода укажи и назначение, и сумму.");
+    const amount=int(raw,1,1000000000,"сумма расхода");
+    expenses.push({reason,amount});
+  }
+  return {payment,paymentNote,expenses};
+}
+
 async function perform(context,form) {
   const db=context.env.DB, action=text(form.get("action"));
   if(action==="opening-import")return importOpening(context);
@@ -485,7 +516,9 @@ async function perform(context,form) {
     const note=text(form.get("note")).trim().slice(0,250);
     const batchName=text(form.get("batch_name")).trim();
     if(!batchName||batchName.length>150)throw Error("Укажите название партии поставщика.");
-    await db.batch([
+    // Validate every optional payment and expense BEFORE writing anything.
+    const extras=receiptExtras(form);
+    const statements=[
       db.prepare("INSERT OR IGNORE INTO finance_suppliers(name) VALUES(?)").bind(supplierName),
       db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) "+
         "SELECT s.id,? FROM finance_suppliers s WHERE s.name=?")
@@ -493,11 +526,29 @@ async function perform(context,form) {
       db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note) "+
         "SELECT ?,?,?,s.id,b.id,?,?,?,? FROM finance_suppliers s "+
         "JOIN finance_batches b ON b.supplier_id=s.id AND b.name=? WHERE s.name=?")
-        .bind(productId,product.slug,size,ownership,qty,cost,note,batchName,supplierName),
-      db.prepare("INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP")
-        .bind(product.slug,productId,size,qty)
-    ]);
-    return "Приёмка зафиксирована. Остаток увеличен на "+qty+" шт. Товар не публиковался.";
+        .bind(productId,product.slug,size,ownership,qty,cost,note,batchName,supplierName)
+    ];
+    if(extras.payment>0){
+      // Immediately after inserting the receipt, last_insert_rowid() points
+      // to THIS receipt, not any other receipt in a same-named supplier batch.
+      statements.push(db.prepare(
+        "INSERT INTO finance_supplier_payments(receipt_id,amount,note) VALUES(last_insert_rowid(),?,?)"
+      ).bind(extras.payment,extras.paymentNote));
+    }
+    for(const e of extras.expenses){
+      statements.push(db.prepare("INSERT INTO finance_expenses(reason,amount) VALUES(?,?)").bind(e.reason,e.amount));
+    }
+    statements.push(db.prepare(
+      "INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) "+
+      "ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP"
+    ).bind(product.slug,productId,size,qty));
+    // D1 batch is atomic: a failed payment, expense or stock write rolls back
+    // receipt, supplier creation, all other writes as one transaction.
+    await db.batch(statements);
+    return "Поступление оформлено: +"+qty+" шт. на складе"+
+      (extras.payment ? ", поставщику записано "+money(extras.payment) : "")+
+      (extras.expenses.length ? ", дополнительных расходов: "+extras.expenses.length : "")+
+      ". Товар не публиковался.";
   }
   if(action==="payment"){
     const receiptId=int(form.get("receipt_id"),1,100000000,"партия");
