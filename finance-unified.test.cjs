@@ -87,7 +87,7 @@ test("new receipt plus actual payment and two expenses use one D1 atomic batch",
   form.append("expense_reason","Упаковка");
   form.append("expense_amount","120");
   const message=await perform(context,form);
-  assert.match(message,/\\+5 шт\. на складе/);
+  assert.match(message,/\+5 шт\. на складе/);
   assert.match(message,/дополнительных расходов: 2/);
   assert.equal(writes.length,7);
   assert.match(writes[0].sql,/finance_suppliers/);
