@@ -1,0 +1,48 @@
+name: Pages CMS → Financial CRM
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: Pages CMS action metadata
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest catalog
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Register marked finance products
+        env:
+          FINANCE_SYNC_TOKEN: ${{ secrets.FINANCE_SYNC_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          if (!process.env.FINANCE_SYNC_TOKEN || process.env.FINANCE_SYNC_TOKEN.length < 32) {
+            throw new Error("Set FINANCE_SYNC_TOKEN as a GitHub Actions repository secret and Cloudflare Pages production secret first.");
+          }
+          const products = JSON.parse(fs.readFileSync("data/products.json","utf8"));
+          const marked = products.filter(p => p.finance_enabled === true)
+            .map(({ product_id, slug, title }) => ({ product_id, slug, title }));
+          if (!marked.length) {
+            console.log("No marked products found in Pages CMS.");
+            process.exit(0);
+          }
+          const response = await fetch("https://five-oceans-merch.pages.dev/api/finance/import", {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + process.env.FINANCE_SYNC_TOKEN,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ products: marked })
+          });
+          const body = await response.json();
+          if (!response.ok || !body.success)
+            throw new Error("Finance import failed: " + (body.error || response.status));
+          console.log("Imported finance products:", body.count);
+          NODE
