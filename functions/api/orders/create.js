@@ -374,9 +374,9 @@ export async function onRequestPost({ request, env }) {
     for (const requested of requestedItems) {
       const product = productsBySlug.get(requested.slug);
 
-      if (!product) {
+      if (!product || product.published !== true) {
         return fail(
-          "Товар больше не найден: " + requested.slug,
+          "Товар не опубликован или больше не найден: " + requested.slug,
           409
         );
       }
