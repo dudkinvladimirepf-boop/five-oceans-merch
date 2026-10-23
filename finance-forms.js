@@ -87,7 +87,7 @@
     if(!allowNew){
       const form=select.closest("form");
       if(form)form.addEventListener("submit",event=>{
-        if(!select.value){
+        if(!select.disabled&&!select.value){
           event.preventDefault();
           input.setCustomValidity("Выберите товар, цвет и размер из подсказки или полного списка.");
           input.reportValidity();
@@ -118,6 +118,25 @@
     }
     const submit=document.getElementById("confirm-receipt");
     const form=submit?.closest("form");
+    const mode=document.getElementById("finance-operation-mode");
+    const receiptFields=document.getElementById("receipt-main-fields");
+    const existingBox=document.getElementById("existing-receipt-select");
+    const existingSelect=document.getElementById("finance-existing-receipt");
+    if(mode&&receiptFields&&existingBox&&existingSelect){
+      const hasSkuChoices=Boolean(document.querySelector("#receipt-sku-select option[value]:not([value=''])"));
+      const toggle=()=>{
+        const receiving=mode.value==="receipt";
+        receiptFields.hidden=!receiving;
+        existingBox.hidden=receiving;
+        existingSelect.disabled=receiving;
+        receiptFields.querySelectorAll("input,select,textarea").forEach(control=>{
+          control.disabled=!receiving;
+        });
+        if(submit)submit.disabled=receiving&&!hasSkuChoices;
+      };
+      mode.addEventListener("change",toggle);
+      toggle();
+    }
     if(form){
       let submitted=false;
       form.addEventListener("submit",event=>{
