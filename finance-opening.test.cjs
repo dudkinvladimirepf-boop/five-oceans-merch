@@ -111,7 +111,7 @@ test("both SQL migrations, live opening statements, repeat guard and supplier-sc
     queries:sim.queries,
     inventory
   };
-  const python=String.raw\`
+  const python=String.raw`
 import sys,json,sqlite3
 p=json.load(sys.stdin)
 db=sqlite3.connect(':memory:')
@@ -149,7 +149,7 @@ id2=db.execute("SELECT id FROM finance_suppliers WHERE name='Другой пос
 db.execute("INSERT INTO finance_batches(supplier_id,name) VALUES(?,?)",(id2,'Начальная партия № 1'))
 assert db.execute("SELECT count(*) FROM finance_batches WHERE name='Начальная партия № 1'").fetchone()[0]==2
 print('OK; 9 products, two actual opening SKUs, zero inventory change, one-time guard, separate supplier batches')
-\`.replaceAll("\\\\\`","\`");
+`;
   const run=spawnSync("python3",["-c",python],{input:JSON.stringify(input),encoding:"utf8"});
   assert.equal(run.status,0,run.stderr||run.stdout);
   assert.match(run.stdout,/^OK;/);
