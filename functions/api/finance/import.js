@@ -21,18 +21,18 @@ export async function onRequestPost({request,env}) {
     const seenIds=new Set(),seenSlugs=new Set(),rows=[];
     for(const p of input){
       const id=String(p.product_id||"").toLowerCase(),slug=String(p.slug||"").trim(),
-        title=String(p.title||"").trim();
+        title=String(p.title||"").trim(),price=Number(p.price||0);
       if(!idPattern.test(id)||!slugPattern.test(slug)||slug.length>300||
-         !title||title.length>400||seenIds.has(id)||seenSlugs.has(slug))
+         !title||title.length>400||!Number.isSafeInteger(price)||price<0||price>100000000||seenIds.has(id)||seenSlugs.has(slug))
         return json({success:false,error:"Duplicate or invalid product ID/slug/title."},400);
-      seenIds.add(id);seenSlugs.add(slug);rows.push([id,slug,title]);
+      seenIds.add(id);seenSlugs.add(slug);rows.push([id,slug,title,price]);
     }
     const result=await env.DB.prepare(
-      "INSERT INTO finance_products (product_id,product_slug,title) "+
-      "SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]') "+
+      "INSERT INTO finance_products (product_id,product_slug,title,list_price) "+
+      "SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),json_extract(value,'$[3]') "+
       "FROM json_each(?) WHERE 1 "+
       "ON CONFLICT(product_id) DO UPDATE SET product_slug=excluded.product_slug,"+
-      "title=excluded.title,updated_at=CURRENT_TIMESTAMP"
+      "title=excluded.title,list_price=excluded.list_price,updated_at=CURRENT_TIMESTAMP"
     ).bind(JSON.stringify(rows)).run();
     return json({success:true,count:rows.length,changed:Number(result.meta?.changes||0)});
   }catch(error){
