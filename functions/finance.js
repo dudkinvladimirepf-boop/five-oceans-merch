@@ -281,7 +281,7 @@ async function testCleanupDelete(db,form){
   if(s.finance_products.length!==1)
     throw Error("Тестовая карточка финансов не найдена; повторная очистка не требуется.");
   const orderIds=s.orders.map(x=>x.order_id), batchIds=s.finance_batches.map(b=>b.id);
-  const supplierIds=s.finance_suppliers.map(x=>x.id);
+  const supplierIds=s.finance_suppliers.filter(x=>/тест|test/i.test(String(x.name).toLocaleLowerCase("ru"))).map(x=>x.id);
   const id=TEST_CRM.id, slug=TEST_CRM.slug;
   const statements=[
     db.prepare("DELETE FROM finance_supplier_payments WHERE receipt_id IN (SELECT id FROM finance_receipts WHERE product_id=? AND product_slug=?)").bind(id,slug),
@@ -292,7 +292,7 @@ async function testCleanupDelete(db,form){
     db.prepare("DELETE FROM inventory_exclusions WHERE product_slug=? AND (product_id=? OR product_id IS NULL)").bind(slug,id),
     db.prepare("DELETE FROM inventory WHERE product_slug=? AND product_id=? AND reserved_quantity=0").bind(slug,id),
     db.prepare("DELETE FROM finance_batches WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)) AND NOT EXISTS (SELECT 1 FROM finance_receipts r WHERE r.batch_id=finance_batches.id)").bind(JSON.stringify(batchIds)),
-    db.prepare("DELETE FROM finance_suppliers WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)) AND (lower(name) LIKE '%тест%' OR lower(name) LIKE '%test%') AND NOT EXISTS (SELECT 1 FROM finance_receipts r WHERE r.supplier_id=finance_suppliers.id)").bind(JSON.stringify(supplierIds))
+    db.prepare("DELETE FROM finance_suppliers WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)) AND NOT EXISTS (SELECT 1 FROM finance_receipts r WHERE r.supplier_id=finance_suppliers.id)").bind(JSON.stringify(supplierIds))
   ];
   // D1.batch executes these statements in one atomic transaction.
   await db.batch(statements);
