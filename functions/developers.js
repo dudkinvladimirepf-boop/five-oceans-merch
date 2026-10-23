@@ -1922,6 +1922,7 @@ async function dashboard(context, secret, options = {}) {
         ${counts ? `<span class="tab-count">${number(counts.pending)} новых</span>` : ""}
       </a>
       <a href="/developers?tab=stock" class="${tab==="stock"?"active":""}">Склад</a>
+      <a href="/finance">Финансы</a>
       <a href="/developers?tab=trash" class="${tab==="trash"?"active":""}">
         Корзина товаров <span class="tab-count">${number(excluded.length)}</span>
       </a>
