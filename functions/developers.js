@@ -1006,32 +1006,28 @@ async function syncCatalog(context) {
   const db = database(context.env);
   const products = await productsFromCMS(context);
 
-  const report = {
-    created: 0,
-    linked: 0,
-    updated: 0,
-    unchanged: 0,
-    excluded: 0,
-    archived: 0,
-    warnings: []
-  };
+  // Never archive the warehouse if the catalog unexpectedly becomes empty.
+  if (!products.length) {
+    throw new Error("Каталог Pages CMS пуст. Синхронизация остановлена без изменений.");
+  }
 
+  const report = {
+    created: 0, linked: 0, updated: 0, unchanged: 0,
+    excluded: 0, archived: 0, warnings: []
+  };
   const usedIds = new Map();
   const usedSlugs = new Map();
   const positions = [];
-
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const pairKey = (slug, size) => JSON.stringify([slug, size]);
+  const idSizeKey = (id, size) => JSON.stringify([String(id).toLowerCase(), size]);
 
   for (const product of products) {
     const slug = String(product?.slug || "").trim();
-    const id = String(product?.product_id || "")
-      .trim().toLowerCase();
-
+    const id = String(product?.product_id || "").trim().toLowerCase();
     const title = String(product?.title || slug);
 
     if (!slug || !uuidPattern.test(id)) {
-      // Каталог неполон или повреждён: НЕ архивируем рабочие товары.
       throw new Error(
         "Синхронизация остановлена: у товара «" + title +
         "» отсутствует корректный slug или product_id."
@@ -1042,143 +1038,163 @@ async function syncCatalog(context) {
       (usedIds.has(id) && usedIds.get(id) !== slug) ||
       (usedSlugs.has(slug) && usedSlugs.get(slug) !== id)
     ) {
-      throw new Error(
-        "Обнаружены повторяющиеся идентификаторы товаров."
-      );
+      throw new Error("Обнаружены повторяющиеся идентификаторы товаров.");
     }
-
     usedIds.set(id, slug);
     usedSlugs.set(slug, id);
-
     for (const size of sizesOf(product)) {
       positions.push({ slug, id, size });
     }
   }
 
-  /*
-    Pages CMS — источник состава каталога. Только по кнопке
-    архивируем в корзину позиции, которых уже нет в Pages CMS.
-    Физически inventory не удаляется: остатки и история заказов целы.
-    Отдельные исключения, созданные в CRM вручную, тоже сохраняются.
-  */
-  const wanted = new Set(positions.map(p => JSON.stringify([p.slug,p.size])));
-  const existingRows = await db.prepare(
-    "SELECT product_slug, size FROM inventory"
-  ).all();
-  for (const row of existingRows.results || []) {
+  // Two catalog-wide reads instead of multiple round trips per color and size.
+  const [storedResult, excludedResult] = await Promise.all([
+    db.prepare("SELECT product_slug, product_id, size FROM inventory").all(),
+    db.prepare("SELECT product_slug, product_id, size FROM inventory_exclusions").all()
+  ]);
+  const stored = storedResult.results || [];
+  const exclusions = excludedResult.results || [];
+  const storedByPair = new Map();
+  const storedByIdSize = new Map();
+  const excludedPairs = new Set();
+  const excludedIdSizes = new Set();
+
+  for (const row of stored) {
     const slug = String(row.product_slug);
     const size = String(row.size || "");
-    if (wanted.has(JSON.stringify([slug,size]))) continue;
-
-    const archived = await db.prepare(
-      `INSERT INTO inventory_exclusions (product_slug, size, product_id)
-       SELECT product_slug, size, product_id FROM inventory
-       WHERE product_slug = ? AND size = ?
-       ON CONFLICT(product_slug,size) DO NOTHING`
-    ).bind(slug,size).run();
-    report.archived += Number(archived.meta?.changes || 0);
+    const id = String(row.product_id || "").toLowerCase();
+    storedByPair.set(pairKey(slug, size), row);
+    if (id) storedByIdSize.set(idSizeKey(id, size), row);
+  }
+  for (const row of exclusions) {
+    const slug = String(row.product_slug);
+    const size = String(row.size || "");
+    const id = String(row.product_id || "").toLowerCase();
+    excludedPairs.add(pairKey(slug, size));
+    if (id) excludedIdSizes.add(idSizeKey(id, size));
   }
 
-  for (const item of positions) {
-    const { slug, id, size } = item;
+  const wanted = new Set(positions.map(p => pairKey(p.slug, p.size)));
+  const renames = [];
+  const links = [];
+  const creates = [];
 
-    // Удалённую вручную позицию не возвращаем.
-
-    const excluded = await db.prepare(
-      `SELECT 1
-       FROM inventory_exclusions
-       WHERE (product_slug = ? AND size = ?)
-          OR (product_id = ? AND size = ?)
-       LIMIT 1`
-    ).bind(slug, size, id, size).first();
-
-    if (excluded) {
+  for (const { slug, id, size } of positions) {
+    const key = pairKey(slug, size);
+    if (excludedPairs.has(key) || excludedIdSizes.has(idSizeKey(id, size))) {
       report.excluded++;
       continue;
     }
 
-    const byId = await db.prepare(
-      `SELECT product_slug
-       FROM inventory
-       WHERE product_id = ? AND size = ?
-       LIMIT 1`
-    ).bind(id, size).first();
-
-    if (byId) {
-      if (byId.product_slug === slug) {
+    const sameId = storedByIdSize.get(idSizeKey(id, size));
+    if (sameId) {
+      const oldSlug = String(sameId.product_slug);
+      if (oldSlug === slug) {
         report.unchanged++;
-        continue;
+      } else if (storedByPair.has(key)) {
+        report.warnings.push("Конфликт адреса: " + slug + " / " + size);
+      } else {
+        renames.push([slug, oldSlug, size, id]);
       }
-
-      const occupied = await db.prepare(
-        `SELECT 1 FROM inventory
-         WHERE product_slug = ? AND size = ?`
-      ).bind(slug, size).first();
-
-      if (occupied) {
-        report.warnings.push(
-          "Конфликт адреса: " + slug + " / " + size
-        );
-        continue;
-      }
-
-      const update = await db.prepare(
-        `UPDATE inventory
-         SET product_slug = ?,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE product_id = ? AND size = ?
-           AND product_slug = ?`
-      ).bind(slug, id, size, byId.product_slug).run();
-
-      report.updated += Number(update.meta?.changes || 0);
       continue;
     }
 
-    const bySlug = await db.prepare(
-      `SELECT product_id FROM inventory
-       WHERE product_slug = ? AND size = ?
-       LIMIT 1`
-    ).bind(slug, size).first();
-
-    if (bySlug) {
-      const oldId = String(
-        bySlug.product_id || ""
-      ).toLowerCase();
-
+    const sameKey = storedByPair.get(key);
+    if (sameKey) {
+      const oldId = String(sameKey.product_id || "").toLowerCase();
       if (oldId && oldId !== id) {
-        report.warnings.push(
-          "Конфликт product_id: " + slug + " / " + size
-        );
-        continue;
-      }
-
-      if (!oldId) {
-        const update = await db.prepare(
-          `UPDATE inventory
-           SET product_id = ?,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE product_slug = ? AND size = ?
-             AND product_id IS NULL`
-        ).bind(id, slug, size).run();
-
-        report.linked += Number(update.meta?.changes || 0);
+        report.warnings.push("Конфликт product_id: " + slug + " / " + size);
+      } else if (!oldId) {
+        links.push([slug, size, id]);
       } else {
         report.unchanged++;
       }
-
       continue;
     }
 
-    const inserted = await db.prepare(
-      `INSERT OR IGNORE INTO inventory (
-         product_slug, product_id, size,
-         total_quantity, reserved_quantity
-       ) VALUES (?, ?, ?, 0, 0)`
-    ).bind(slug, id, size).run();
-
-    report.created += Number(inserted.meta?.changes || 0);
+    creates.push([slug, id, size]);
   }
 
+  // Keep the original stock and reservations when the slug changes.
+  const renamedSources = new Set(renames.map(row => pairKey(row[1], row[2])));
+  const archives = [];
+  for (const row of stored) {
+    const slug = String(row.product_slug);
+    const size = String(row.size || "");
+    const key = pairKey(slug, size);
+    if (!wanted.has(key) && !renamedSources.has(key) && !excludedPairs.has(key)) {
+      archives.push([slug, size]);
+    }
+  }
+
+  // JSON1 packs any number of positions into four statements at most.
+  // D1 Free permits 50 SQL queries per invocation, so batching individual
+  // per-size SELECTs would still fail as the catalog grows.
+  const statements = [];
+  const actions = [];
+  function add(action, sql, rows) {
+    if (!rows.length) return;
+    statements.push(db.prepare(sql).bind(JSON.stringify(rows)));
+    actions.push(action);
+  }
+
+  add("archived", `
+    INSERT OR IGNORE INTO inventory_exclusions (product_slug, size, product_id)
+    SELECT i.product_slug, i.size, i.product_id
+    FROM inventory AS i
+    JOIN json_each(?) AS rows
+      ON json_extract(rows.value, '$[0]') = i.product_slug
+     AND json_extract(rows.value, '$[1]') = i.size
+  `, archives);
+
+  add("updated", `
+    WITH changes AS (
+      SELECT json_extract(value, '$[0]') AS next_slug,
+             json_extract(value, '$[1]') AS old_slug,
+             json_extract(value, '$[2]') AS size,
+             json_extract(value, '$[3]') AS product_id
+      FROM json_each(?)
+    )
+    UPDATE inventory
+    SET product_slug = changes.next_slug, updated_at = CURRENT_TIMESTAMP
+    FROM changes
+    WHERE inventory.product_slug = changes.old_slug
+      AND inventory.size = changes.size
+      AND inventory.product_id = changes.product_id
+  `, renames);
+
+  add("linked", `
+    WITH changes AS (
+      SELECT json_extract(value, '$[0]') AS slug,
+             json_extract(value, '$[1]') AS size,
+             json_extract(value, '$[2]') AS product_id
+      FROM json_each(?)
+    )
+    UPDATE inventory
+    SET product_id = changes.product_id, updated_at = CURRENT_TIMESTAMP
+    FROM changes
+    WHERE inventory.product_slug = changes.slug
+      AND inventory.size = changes.size
+      AND inventory.product_id IS NULL
+  `, links);
+
+  add("created", `
+    INSERT OR IGNORE INTO inventory (
+      product_slug, product_id, size, total_quantity, reserved_quantity
+    )
+    SELECT json_extract(value, '$[0]'),
+           json_extract(value, '$[1]'),
+           json_extract(value, '$[2]'), 0, 0
+    FROM json_each(?)
+  `, creates);
+
+  if (statements.length) {
+    // D1 executes the batch as a transaction; existing quantities are never reset.
+    const results = await db.batch(statements);
+    for (let i = 0; i < actions.length; i++) {
+      report[actions[i]] += Number(results[i]?.meta?.changes || 0);
+    }
+  }
   return report;
 }
 
@@ -1937,7 +1953,7 @@ async function dashboard(context, secret, options = {}) {
             Только по нажатию этой кнопки CRM сверяет каталог Pages CMS,
             добавляет новые размеры и цвета, а отсутствующие в Pages позиции
             перемещает в «Корзину товаров». Ничего не удаляется физически.</p>
-          <form method="POST" action="${esc(formAction)}#stock">
+          <form method="POST" action="/developers?tab=stock#stock">
             ${hidden("action","sync")}
             ${hidden("csrf",csrf)}
             <button class="blue-button" type="submit"
