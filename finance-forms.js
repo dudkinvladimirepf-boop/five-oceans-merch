@@ -87,7 +87,7 @@
     if(!allowNew){
       const form=select.closest("form");
       if(form)form.addEventListener("submit",event=>{
-        if(!select.value){
+        if(!select.disabled&&!select.value){
           event.preventDefault();
           input.setCustomValidity("Выберите товар, цвет и размер из подсказки или полного списка.");
           input.reportValidity();
@@ -103,6 +103,50 @@
   const ready=()=>{
     connect("receipt-sku-select","receipt-sku-search","receipt-sku-suggestions",false);
     connect("receipt-supplier-select","receipt-supplier-input","receipt-supplier-suggestions",true);
+    const expenses=document.getElementById("receipt-expenses");
+    const add=document.getElementById("add-receipt-expense");
+    const first=expenses?.querySelector(".expense-line");
+    if(expenses&&first&&add){
+      add.addEventListener("click",()=>{
+        if(expenses.querySelectorAll(".expense-line").length>=10)return;
+        const line=first.cloneNode(true);
+        line.querySelectorAll("input").forEach(input=>input.value="");
+        expenses.append(line);
+        line.querySelector("input")?.focus();
+        if(expenses.querySelectorAll(".expense-line").length>=10)add.hidden=true;
+      });
+    }
+    const submit=document.getElementById("confirm-receipt");
+    const form=submit?.closest("form");
+    const mode=document.getElementById("finance-operation-mode");
+    const receiptFields=document.getElementById("receipt-main-fields");
+    const existingBox=document.getElementById("existing-receipt-select");
+    const existingSelect=document.getElementById("finance-existing-receipt");
+    if(mode&&receiptFields&&existingBox&&existingSelect){
+      const hasSkuChoices=Boolean(document.querySelector("#receipt-sku-select option[value]:not([value=''])"));
+      const toggle=()=>{
+        const receiving=mode.value==="receipt";
+        receiptFields.hidden=!receiving;
+        existingBox.hidden=receiving;
+        existingSelect.disabled=receiving;
+        receiptFields.querySelectorAll("input,select,textarea").forEach(control=>{
+          control.disabled=!receiving;
+        });
+        if(submit)submit.disabled=receiving&&!hasSkuChoices;
+      };
+      mode.addEventListener("change",toggle);
+      toggle();
+    }
+    if(form){
+      let submitted=false;
+      form.addEventListener("submit",event=>{
+        if(event.defaultPrevented)return;
+        if(submitted){event.preventDefault();return;}
+        submitted=true;
+        submit.disabled=true;
+        submit.textContent="Записываем поступление и расчёты…";
+      });
+    }
   };
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);
   else ready();
