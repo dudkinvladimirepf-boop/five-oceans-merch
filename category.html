@@ -604,9 +604,12 @@ async function loadCategory() {
       "categoryDescription"
     ).textContent = category.description || "";
 
+    /* Черновики не видны в публичном каталоге. */
+    const visibleProducts = products.filter(p => p && p.published === true);
+
     /* Фильтрация товаров */
 
-    const matchingProducts = products.filter(
+    const matchingProducts = visibleProducts.filter(
       product =>
         normalize(product.category) ===
         normalize(category.id)
