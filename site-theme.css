@@ -103,7 +103,7 @@ body .hero-button:hover,body .telegram-button:not(:disabled):hover {
 body .telegram-button:disabled,body .add-button:disabled {
   background:#aab5bd!important; cursor:not-allowed; transform:none!important;
 }
-body .add-button:not(:disabled):hover { background:#a50868!important; }
+body .add-button:not(:disabled):hover { background:#b80510!important; }
 body .secondary-button,body .chat-link { border-radius:10px; }
 .site-footer .footer-brand { padding:4px 8px; border-radius:9px; background:rgba(255,255,255,.95); }
 body .hero-button { display:inline-flex; justify-content:center; align-items:center; gap:14px; padding:14px 27px; margin-top:10px; }
@@ -244,7 +244,9 @@ body:not(.home-page) .hero h1 { color:white; }
 body:not(.home-page) .open-product { color:var(--fuchsia); }
 body:not(.home-page) .size.selected { background:var(--navy); border-color:var(--navy); }
 body:not(.home-page) .thumbnails button.active { border-color:var(--fuchsia); }
-body:not(.home-page) :is(.add-button,.buy-button,.checkout-primary,button.primary-button) { background:var(--fuchsia); color:white; }
+body:not(.home-page) :is(.buy-button,.checkout-primary,button.primary-button) { background:var(--fuchsia); color:white; }
+/* Только кнопка «Добавить в корзину»: фирменный красный. Остальные акценты остаются прежними. */
+body .add-button:not(:disabled) { background:#e30613!important; color:white!important; }
 body:not(.home-page) .card img { background:#f6f8fb; }
 body:not(.home-page) .category-promo { color:var(--muted); }
 .search-results { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:20px; }
