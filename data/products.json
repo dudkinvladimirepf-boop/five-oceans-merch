@@ -322,28 +322,5 @@
         "new_arrival": true
       }
     ]
-  },
-  {
-    "product_id": "b3ec1243-b170-4d8c-94b6-2a7feef4b9fe",
-    "title": "ТЕСТ CRM — удалить после проверки",
-    "slug": "test_crm",
-    "design": "ТЕСТ CRM — удалить после проверки",
-    "price": 100,
-    "category": "аксессуары",
-    "published": true,
-    "finance_enabled": true,
-    "variants": [
-      {
-        "code": "black",
-        "label": "черный",
-        "hex": "#142448",
-        "sizes": [
-          "Без размера"
-        ],
-        "available": true,
-        "featured": true,
-        "new_arrival": true
-      }
-    ]
   }
 ]
