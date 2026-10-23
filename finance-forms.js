@@ -103,6 +103,31 @@
   const ready=()=>{
     connect("receipt-sku-select","receipt-sku-search","receipt-sku-suggestions",false);
     connect("receipt-supplier-select","receipt-supplier-input","receipt-supplier-suggestions",true);
+    const expenses=document.getElementById("receipt-expenses");
+    const add=document.getElementById("add-receipt-expense");
+    const first=expenses?.querySelector(".expense-line");
+    if(expenses&&first&&add){
+      add.addEventListener("click",()=>{
+        if(expenses.querySelectorAll(".expense-line").length>=10)return;
+        const line=first.cloneNode(true);
+        line.querySelectorAll("input").forEach(input=>input.value="");
+        expenses.append(line);
+        line.querySelector("input")?.focus();
+        if(expenses.querySelectorAll(".expense-line").length>=10)add.hidden=true;
+      });
+    }
+    const submit=document.getElementById("confirm-receipt");
+    const form=submit?.closest("form");
+    if(form){
+      let submitted=false;
+      form.addEventListener("submit",event=>{
+        if(event.defaultPrevented)return;
+        if(submitted){event.preventDefault();return;}
+        submitted=true;
+        submit.disabled=true;
+        submit.textContent="Записываем поступление и расчёты…";
+      });
+    }
   };
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);
   else ready();
