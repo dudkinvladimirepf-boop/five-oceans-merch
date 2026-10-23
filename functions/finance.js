@@ -47,6 +47,19 @@ async function csrf(request, secret) {
   return await hmac(secret,"developers-action:"+cookieValue(request));
 }
 const skuKey=(slug,size)=>JSON.stringify([slug,size]);
+// Fixed snapshot of merchandise existing when the opening balance was planned.
+// New products are intentionally excluded from the one-time opening import.
+const LEGACY_UNIT_COSTS = new Map([
+  ["d233280c-ab61-41e7-a3bd-c7682b38bc81",2950], // all hoodie colors and sizes
+  ["6adb0179-7668-4942-8a7b-1806dfec65b9",2285], // all sweatshirt colors and sizes
+  ["2114867b-3c44-483f-9c45-d5acea342836",1400],["63ab85af-1303-44c0-b588-f482f1b251a7",1400],
+  ["1cab5aa8-9717-4756-88e7-317ba95dc9be",1400],["c6e83d8c-ab0a-42d4-a7dc-dbb1607a938e",1400],
+  ["f74d03ce-a0aa-4f04-a738-c60a9221cec1",1400],["056aca62-9e79-4fa3-8d0b-647f35f30402",1400],
+  ["6fa7f415-e6e3-4b9d-b408-e8cc0da44cf7",700]
+]);
+const LEGACY_BATCH_NAME = "Начальная партия № 1";
+const LEGACY_SUPPLIER_NAME = "Неизвестный поставщик";
+
 
 async function catalog(context) {
   const url = new URL("/data/products.json",context.request.url);
@@ -59,17 +72,20 @@ async function catalog(context) {
 }
 
 async function records(db) {
-  const [products,suppliers,receipts,payments,expenses,sales]=await Promise.all([
+  const [products,suppliers,receipts,payments,expenses,sales,batches,opening]=await Promise.all([
     db.prepare("SELECT product_id,product_slug,title,list_price FROM finance_products ORDER BY title").all(),
     db.prepare("SELECT id,name FROM finance_suppliers ORDER BY name").all(),
-    db.prepare("SELECT r.*,s.name AS supplier FROM finance_receipts r JOIN finance_suppliers s ON s.id=r.supplier_id ORDER BY r.id").all(),
+    db.prepare("SELECT r.*,s.name AS supplier,b.name AS batch_name FROM finance_receipts r JOIN finance_suppliers s ON s.id=r.supplier_id LEFT JOIN finance_batches b ON b.id=r.batch_id ORDER BY r.id").all(),
     db.prepare("SELECT id,receipt_id,amount,note,created_at FROM finance_supplier_payments ORDER BY id").all(),
     db.prepare("SELECT id,reason,amount,created_at FROM finance_expenses ORDER BY id").all(),
-    db.prepare("SELECT oi.order_id,oi.product_slug,oi.size,oi.quantity,oi.unit_price,o.updated_at FROM orders o JOIN order_items oi ON oi.order_id=o.order_id WHERE o.status='sold' ORDER BY o.updated_at,o.order_id,oi.product_slug,oi.size").all()
+    db.prepare("SELECT oi.order_id,oi.product_slug,oi.size,oi.quantity,oi.unit_price,o.updated_at FROM orders o JOIN order_items oi ON oi.order_id=o.order_id WHERE o.status='sold' AND (NOT EXISTS (SELECT 1 FROM finance_opening_state WHERE id='legacy-v1') OR o.updated_at > (SELECT snapshot_at FROM finance_opening_state WHERE id='legacy-v1')) ORDER BY o.updated_at,o.order_id,oi.product_slug,oi.size").all(),
+    db.prepare("SELECT id,supplier_id,name FROM finance_batches ORDER BY id").all(),
+    db.prepare("SELECT id,snapshot_at,stock_lines FROM finance_opening_state WHERE id='legacy-v1'").first()
   ]);
   return {products:products.results||[],suppliers:suppliers.results||[],
     receipts:receipts.results||[],payments:payments.results||[],
-    expenses:expenses.results||[],sales:sales.results||[]};
+    expenses:expenses.results||[],sales:sales.results||[],
+    batches:batches.results||[],opening:opening||null};
 }
 
 function calculate(data) {
@@ -115,7 +131,10 @@ function calculate(data) {
     const cost=Number(r.unit_cost), paid=data.payments.filter(x=>x.receipt_id===r.id)
       .reduce((a,x)=>a+Number(x.amount),0);
     supplierPayments+=paid;
-    const owedBase=(r.ownership==="purchase"?received:sold)*cost;
+    // Existing stock predates finance accounting. Its origin is unknown;
+    // never assume an outstanding debt or cash expense for opening units.
+    const owedBase=Number(r.is_opening||0)===1 ? 0 :
+      (r.ownership==="purchase"?received:sold)*cost;
     const debt=Math.max(0,owedBase-paid);
     const excess=Math.max(0,paid-owedBase);
     supplierLiability+=debt;
@@ -161,7 +180,7 @@ function formStart(action,token){
 function options(rows,valFn,labelFn){
   return rows.map(x=>'<option value="'+esc(valFn(x))+'">'+esc(labelFn(x))+'</option>').join("");
 }
-function show(data,summary,products,token,notice,error) {
+function show(data,summary,products,token,notice,error,filters={}) {
   const taxInfo='<p class="muted">Налог — предварительный управленческий расчёт 6% от выручки по заказам со статусом «Оплачен».'+
     ' Это не налоговая декларация: дата фактического получения денег, возвраты, комиссии и условия договора требуют проверки.</p>';
   const stats=[
@@ -191,7 +210,25 @@ function show(data,summary,products,token,notice,error) {
       const stockSize="v:"+v.code+"|"+size;
       return {value:JSON.stringify([p.product_id,stockSize]),label:p.title+" — "+v.label+" / "+size};
     })));
-  const receiptOpts=options(summary.rows,r=>r.id,r=>"#"+r.id+" "+r.product_slug+" / "+r.stock_size+" · "+r.supplier);
+  const receiptOpts=options(summary.rows.filter(r=>Number(r.is_opening||0)!==1),r=>r.id,r=>"#"+r.id+" "+(r.batch_name||"Без названия")+" · "+r.product_slug+" / "+r.stock_size+" · "+r.supplier);
+  const supplierFilter=String(filters.supplier||"");
+  const batchFilter=String(filters.batch||"");
+  const filteredRows=summary.rows.filter(r=>
+    (!supplierFilter||String(r.supplier_id)===supplierFilter) &&
+    (!batchFilter||String(r.batch_id||"")===batchFilter));
+  html+='<div class="box"><h2>Начальный перенос существующих товаров</h2>'+
+    (data.opening ?
+     '<p class="ok">Начальная партия перенесена '+esc(data.opening.snapshot_at)+
+     ' · товарных позиций на момент переноса: '+Number(data.opening.stock_lines)+
+     '. Повторный перенос заблокирован.</p>' :
+     '<p class="warn">Однократный перенос девяти существующих товаров из Pages и их фактических складских остатков. '+
+     'Поставщик: «Неизвестный поставщик»; партия: «Начальная партия № 1». '+
+     'Закупочные цены уже известны: худи 2 950 ₽, свитшоты 2 285 ₽, футболки 1 400 ₽, шапка 700 ₽. '+
+     '<strong>Складские количества не изменяются; старые заказы не пересчитываются.</strong> '+
+     'Никаких вымышленных долгов и платежей не создаётся.</p>'+
+     formStart("opening-import",token)+
+     '<button type="submit" class="btn-secondary">Перенести существующие товары и остатки (один раз)</button></form>')+
+     '</div>';
   html+='<h2>Добавить операцию</h2><div class="forms">'+
     '<div class="box"><h3>Поставщик</h3>'+formStart("supplier",token)+
       '<label>Название поставщика<input name="name" maxlength="140" required></label>'+
@@ -200,6 +237,7 @@ function show(data,summary,products,token,notice,error) {
       formStart("receipt",token)+
       '<label>Товар и размер<select name="sku" required>'+options(catalogOptions,x=>x.value,x=>x.label)+'</select></label>'+
       '<label>Поставщик<select name="supplier" required>'+supplierOptions+'</select></label>'+
+      '<label>Название партии у поставщика<input name="batch_name" value="Партия № 1" maxlength="150" required></label>'+
       '<label>Тип договора<select name="ownership"><option value="purchase">Выкупили</option>'+
       '<option value="consignment">Под реализацию</option></select></label>'+
       '<label>Количество<input name="quantity" type="number" min="1" max="1000000" required></label>'+
@@ -215,16 +253,25 @@ function show(data,summary,products,token,notice,error) {
       '<label>Назначение<input name="reason" maxlength="250" required></label>'+
       '<label>Сумма (₽)<input name="amount" type="number" min="1" required></label>'+
       '<button>Записать расход</button></form></div></div>';
-  html+='<div class="box"><h2>Поступления и расчёты</h2><div class="scroll"><table>'+
-    '<tr><th>Дата</th><th>Партия</th><th>Поставщик</th><th>Схема</th><th>Получено</th><th>Продано</th><th>Себестоимость/шт.</th><th>Начислено</th><th>Оплачено</th><th>Долг</th></tr>'+
-    summary.rows.map(r=>'<tr><td>'+esc(r.created_at)+'</td><td>#'+r.id+' '+esc(r.product_slug)+'<br><small>'+esc(r.stock_size)+'</small></td>'+
-    '<td>'+esc(r.supplier)+'</td><td>'+(r.ownership==="purchase"?"Выкуп":"Реализация")+
+  html+='<div class="box"><h2>Поступления и расчёты</h2>'+
+    '<form method="GET" action="/finance"><div class="forms">'+
+    '<label>Поставщик<select name="supplier"><option value="">Все поставщики</option>'+
+    data.suppliers.map(x=>'<option value="'+x.id+'"'+(supplierFilter===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join("")+'</select></label>'+
+    '<label>Партия<select name="batch"><option value="">Все партии</option>'+
+    data.batches.map(x=>'<option value="'+x.id+'"'+(batchFilter===String(x.id)?' selected':'')+'>#'+x.id+' · '+esc(x.name)+'</option>').join("")+'</select></label>'+
+    '</div><button type="submit" class="btn-secondary">Найти партии</button> <a href="/finance">Сбросить фильтры</a></form>'+
+    '<p class="muted">Показаны '+filteredRows.length+' из '+summary.rows.length+' складских партий. Общая сводка выше не фильтруется.</p>'+
+    '<div class="scroll"><table>'+
+    '<tr><th>Дата</th><th>Партия / внутренний ID</th><th>Товар и размер</th><th>Поставщик</th><th>Схема</th><th>Получено</th><th>Продано</th><th>Себестоимость/шт.</th><th>Начислено</th><th>Оплачено</th><th>Долг</th></tr>'+
+    filteredRows.map(r=>'<tr><td>'+esc(r.created_at)+'</td><td>#'+esc(r.batch_id||r.id)+' · '+esc(r.batch_name||"Без названия")+'</td>'+
+    '<td>'+esc(r.product_slug)+'<br><small>'+esc(r.stock_size)+'</small></td>'+
+    '<td>'+esc(r.supplier)+'</td><td>'+(Number(r.is_opening||0)===1?"Начальный остаток":(r.ownership==="purchase"?"Выкуп":"Реализация"))+
     '</td><td>'+r.quantity+'</td><td>'+r.qty_sold+'</td><td>'+money(r.unit_cost)+
     '</td><td>'+money(r.liability)+'</td><td>'+money(r.paid)+'</td><td>'+money(r.debt)+'</td></tr>').join("")+
     '</table></div></div>';
   html+='<div class="box"><h2>Примечания к расчёту</h2>'+
     '<p class="muted">Себестоимость списывается по FIFO (сначала более ранние поступления). '+ 
-    'Для выкупленных партий задолженность возникает после приёмки всей партии. '+
+    'Для начальных партий задолженность и выплаты неизвестны, поэтому не начисляются. Для выкупленных новых партий задолженность возникает после приёмки всей партии. '+
     'Для товара под реализацию — только за реализованные единицы. Обычные продажи берутся автоматически '+ 
     'из существующей CRM по статусу «Оплачен»; никакой второй записи заказов не создаётся. '+
     'Сумма «потрачено» основана на записанных платежах и прочих расходах. '+
@@ -232,8 +279,93 @@ function show(data,summary,products,token,notice,error) {
   return layout(html);
 }
 
+
+async function importOpening(context) {
+  const db=context.env.DB;
+  // Read-only checks before the transaction: failed/pre-existing imports must
+  // not add a second beginning balance or silently overwrite manual history.
+  const [state,prior]=await Promise.all([
+    db.prepare("SELECT id FROM finance_opening_state WHERE id='legacy-v1'").first(),
+    db.prepare("SELECT COUNT(*) AS n FROM finance_receipts").first()
+  ]);
+  if(state)throw Error("Начальный перенос уже выполнялся. Повторять его нельзя.");
+  if(Number(prior?.n||0)>0)throw Error("В финансах уже есть зарегистрированные партии. Автоматический перенос остановлен для защиты от удвоения учёта.");
+
+  const items=await catalog(context);
+  const known=new Map(items.filter(p=>p.published===true &&
+    LEGACY_UNIT_COSTS.has(String(p.product_id).toLowerCase()))
+    .map(p=>[p.slug,p]));
+  if(known.size!==LEGACY_UNIT_COSTS.size)
+    throw Error("Часть из девяти первоначальных товаров отсутствует или скрыта в Pages. Перенос отменён.");
+  const byId=new Set([...known.values()].map(p=>String(p.product_id).toLowerCase()));
+  if(byId.size!==LEGACY_UNIT_COSTS.size)
+    throw Error("Повторяющиеся ID старых товаров в Pages. Перенос отменён.");
+
+  const stockResult=await db.prepare(
+    "SELECT i.product_slug,i.size,i.total_quantity,i.reserved_quantity "+
+    "FROM inventory i WHERE i.total_quantity>0 AND NOT EXISTS "+
+    "(SELECT 1 FROM inventory_exclusions e WHERE e.product_slug=i.product_slug AND e.size=i.size)"
+  ).all();
+  // Keep catalog SKU IDs/costs; read actual quantities inside the D1 transaction.
+  const positions=[];
+  for(const p of known.values()) {
+    const cost=LEGACY_UNIT_COSTS.get(String(p.product_id).toLowerCase());
+    for(const v of p.variants||[])for(const size of v.sizes||[])
+      positions.push([p.product_id,p.slug,"v:"+v.code+"|"+size,cost]);
+  }
+  for(const x of stockResult.results||[]){
+    const p=known.get(x.product_slug);
+    if(!p)continue; // Goods absent from the current published catalog are not imported.
+    const valid=(p.variants||[]).some(v=>Array.isArray(v.sizes)&&
+      v.sizes.some(size=>"v:"+v.code+"|"+size===x.size));
+    if(!valid)throw Error("На складе у старого товара есть размер, отсутствующий в Pages: "+p.title+" / "+x.size+". Перенос не выполнен.");
+    const qty=Number(x.total_quantity),reserved=Number(x.reserved_quantity);
+    if(!Number.isSafeInteger(qty)||qty<1||!Number.isSafeInteger(reserved)||reserved<0||reserved>qty)
+      throw Error("Некорректные складские количества: "+p.title+" / "+x.size);
+  }
+  const products=[...known.values()].map(p=>[
+    p.product_id,p.slug,p.title,Number(p.price||0)]);
+  if(products.some(p=>!Number.isSafeInteger(p[3])||p[3]<0))
+    throw Error("Некорректная цена продажи в Pages.");
+  const statements=[
+    // Uniqueness of legacy-v1 makes the whole batch fail atomically on races.
+    db.prepare("INSERT INTO finance_opening_state(id,stock_lines) "+
+      "SELECT 'legacy-v1',COUNT(*) FROM inventory i "+
+      "JOIN json_each(?) x ON i.product_slug=json_extract(x.value,'$[1]') "+
+      "AND i.size=json_extract(x.value,'$[2]') "+
+      "WHERE i.total_quantity>0 AND NOT EXISTS "+
+      "(SELECT 1 FROM inventory_exclusions e WHERE e.product_slug=i.product_slug AND e.size=i.size)"
+    ).bind(JSON.stringify(positions)),
+    db.prepare("INSERT INTO finance_products (product_id,product_slug,title,list_price) "+
+      "SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),json_extract(value,'$[3]') "+
+      "FROM json_each(?) WHERE 1 ON CONFLICT(product_id) DO UPDATE SET "+
+      "product_slug=excluded.product_slug,title=excluded.title,list_price=excluded.list_price,updated_at=CURRENT_TIMESTAMP"
+    ).bind(JSON.stringify(products)),
+    db.prepare("INSERT OR IGNORE INTO finance_suppliers(name) VALUES(?)").bind(LEGACY_SUPPLIER_NAME),
+    db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) "+
+      "SELECT id,? FROM finance_suppliers WHERE name=?").bind(LEGACY_BATCH_NAME,LEGACY_SUPPLIER_NAME)
+  ];
+  if(positions.length) statements.push(
+    db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note,is_opening) "+
+      "SELECT json_extract(x.value,'$[0]'),json_extract(x.value,'$[1]'),json_extract(x.value,'$[2]'),"+
+      "s.id,b.id,'purchase',i.total_quantity,json_extract(x.value,'$[3]'),'Первичный перенос из CRM; без движения склада',1 "+
+      "FROM json_each(?) x JOIN inventory i ON i.product_slug=json_extract(x.value,'$[1]') "+
+      "AND i.size=json_extract(x.value,'$[2]') "+
+      "CROSS JOIN finance_suppliers s JOIN finance_batches b "+
+      "ON b.supplier_id=s.id AND b.name=? WHERE s.name=? AND i.total_quantity>0 "+
+      "AND NOT EXISTS (SELECT 1 FROM inventory_exclusions e "+
+      "WHERE e.product_slug=i.product_slug AND e.size=i.size)"
+    ).bind(JSON.stringify(positions),LEGACY_BATCH_NAME,LEGACY_SUPPLIER_NAME)
+  );
+  await db.batch(statements);
+  return "Начальный перенос выполнен: "+products.length+
+    " товаров. Складские позиции с положительным остатком перенесены по фактическим значениям D1. "+
+    "Остатки не изменялись; долг поставщику не начислялся.";
+}
+
 async function perform(context,form) {
   const db=context.env.DB, action=text(form.get("action"));
+  if(action==="opening-import")return importOpening(context);
   if(action==="import"){
     const items=(await catalog(context)).filter(p=>p.finance_enabled===true &&
       /^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(text(p.product_id)) && p.slug && p.title)
@@ -270,9 +402,14 @@ async function perform(context,form) {
     const qty=int(form.get("quantity"),1,1000000,"количество");
     const cost=int(form.get("unit_cost"),0,100000000,"себестоимость");
     const note=text(form.get("note")).trim().slice(0,250);
+    const batchName=text(form.get("batch_name")).trim();
+    if(!batchName||batchName.length>150)throw Error("Укажите название партии поставщика.");
     await db.batch([
-      db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,ownership,quantity,unit_cost,note) VALUES (?,?,?,?,?,?,?,?)")
-        .bind(productId,product.slug,size,supplier,ownership,qty,cost,note),
+      db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) VALUES(?,?)")
+        .bind(supplier,batchName),
+      db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note) "+
+        "SELECT ?,?,?,?,b.id,?,?,?,? FROM finance_batches b WHERE b.supplier_id=? AND b.name=?")
+        .bind(productId,product.slug,size,supplier,ownership,qty,cost,note,supplier,batchName),
       db.prepare("INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP")
         .bind(product.slug,productId,size,qty)
     ]);
@@ -280,7 +417,7 @@ async function perform(context,form) {
   }
   if(action==="payment"){
     const receiptId=int(form.get("receipt_id"),1,100000000,"партия");
-    const exists=await db.prepare("SELECT id FROM finance_receipts WHERE id=?").bind(receiptId).first();
+    const exists=await db.prepare("SELECT id FROM finance_receipts WHERE id=? AND is_opening=0").bind(receiptId).first();
     if(!exists)throw Error("Партия не найдена.");
     const amount=int(form.get("amount"),1,1000000000,"сумма");
     const note=text(form.get("note")).trim().slice(0,250);
@@ -309,7 +446,7 @@ export async function onRequestGet(context){
     const query=new URL(context.request.url).searchParams;
     if(query.get("download")==="xlsx")return excelDownload(data,report);
     const catalogProducts=await catalog(context);
-    return reply(show(data,report,catalogProducts,await csrf(context.request,secret),query.get("notice")||"",""));
+    return reply(show(data,report,catalogProducts,await csrf(context.request,secret),query.get("notice")||"","",{supplier:query.get("supplier"),batch:query.get("batch")}));
   }catch(error){
     console.error("Finance GET",error);
     return reply(layout('<p class="error">Финансовая база пока недоступна: '+esc(error.message)+
@@ -399,9 +536,9 @@ function excelDownload(data,report){
       ["Продано, шт.",report.quantitySold],["Без зарегистрированной себестоимости, шт.",report.unknownQty]]],
     ["Товары",[["Товар","Slug","Цена продажи, ₽","Средняя цена поставщика, ₽","Выкуплено, шт.","Под реализацию, шт.","Продано, шт.","Выручка, ₽","Себестоимость, ₽","Долг поставщикам, ₽","Без себестоимости, шт."],
       ...report.productRows.map(p=>[p.title,p.product_slug,Number(p.list_price),p.averageCost,p.purchased,p.consignment,p.sold,p.revenue,p.cost,p.due,p.missing])]],
-    ["Партии",[["Дата","№","Товар","Размер / цвет","Поставщик","Договор","Получено","Продано","Остаток","Цена поставщика, ₽","Начислено, ₽","Оплачено, ₽","Долг, ₽"],
-      ...report.rows.map(r=>[r.created_at,r.id,r.product_slug,r.stock_size,r.supplier,
-        r.ownership==="purchase"?"Выкуп":"Под реализацию",Number(r.quantity),r.qty_sold,
+    ["Партии",[["Дата","№ записи","Внутренний № партии","Название партии","Товар","Размер / цвет","Поставщик","Договор","Получено","Продано","Остаток","Цена поставщика, ₽","Начислено, ₽","Оплачено, ₽","Долг, ₽"],
+      ...report.rows.map(r=>[r.created_at,r.id,r.batch_id||"",r.batch_name||"",r.product_slug,r.stock_size,r.supplier,
+        Number(r.is_opening||0)===1?"Начальный остаток":r.ownership==="purchase"?"Выкуп":"Под реализацию",Number(r.quantity),r.qty_sold,
         r.qty_left,Number(r.unit_cost),r.liability,r.paid,r.debt])]],
     ["Продажи",[["Дата","Номер заказа","Товар","Цвет / размер","Количество","Цена продажи, ₽","Выручка, ₽"],
       ...data.sales.map(r=>[r.updated_at,r.order_id,r.product_slug,r.size,Number(r.quantity),
