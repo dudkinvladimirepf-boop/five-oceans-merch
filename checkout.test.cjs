@@ -6,8 +6,9 @@ const { webcrypto } = require("node:crypto");
 const source = fs.readFileSync("cart.html", "utf8").match(/<script>([\s\S]*?)<\/script>/)[1];
 const CART = "five-oceans-cart-v1";
 const RECEIPT = "five-oceans-recent-order-v1";
-const item = { slug: "shirt", size: "L", quantity: 1 };
-const product = { ...item, title: "Футболка", available: true, price: 1000, sizes: ["L"] };
+const item = { slug: "shirt", size: "v:red|L", quantity: 1 };
+const product = { ...item, title: "Футболка", published: true, available: true, price: 1000,
+  variants: [{ code: "red", label: "Красный", hex: "#E30613", available: true, sizes: ["L"], photos: [] }] };
 
 function browser(storage = new Map([[CART, JSON.stringify([item])]])) {
   const nodes = new Map();

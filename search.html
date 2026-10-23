@@ -94,7 +94,7 @@ function catalogHighlighted(product, field) {
     }
     const categoryNames = new Map(categories.map(c=>[normalize(c.id),c.title]));
     const visible = products.filter(p=>{
-      if (!p || !p.slug) return false;
+      if (!p || !p.slug || p.published !== true) return false;
       if (collection === "new" && !catalogHighlighted(p, "new_arrival")) return false;
       if (collection === "featured" && !catalogHighlighted(p, "featured")) return false;
       if (!searchTerm) return true;

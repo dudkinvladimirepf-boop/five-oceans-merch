@@ -1,0 +1,26 @@
+name: Finance checks
+on:
+  pull_request:
+    paths:
+      - "functions/finance.js"
+      - "functions/api/finance/import.js"
+      - "finance.test.cjs"
+      - "functions/developers.js"
+      - "data/products.json"
+      - ".pages.yml"
+      - "migrations/2026-10-23-finance-mvp.sql"
+      - ".github/workflows/finance-tests.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check functions/finance.js
+      - run: node --check functions/api/finance/import.js
+      - run: node --test finance.test.cjs checkout.test.cjs inventory-sync.test.cjs

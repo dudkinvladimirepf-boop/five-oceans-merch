@@ -470,7 +470,7 @@ function cartVariantInfo(product,rawSize) {
   const allowed=Array.isArray(variant.sizes)
     ? variant.sizes.map(String).filter(Boolean) : [];
   const actual=parsed[2];
-  const valid=variant.available===true && allowed.includes(actual);
+  const valid=product.published===true && variant.available===true && allowed.includes(actual);
   // Снимки конкретного цвета не подменяются общими фото товара.
   return {valid,label:String(variant.label||variant.code),size:actual,
     photos:Array.isArray(variant.photos)?variant.photos:[]};
