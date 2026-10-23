@@ -17,6 +17,8 @@ function mockContext(finance=official){
       const stmt={sql,args:[]};
       return {
         bind(...args){stmt.args=args;return this;},
+        get sql(){return stmt.sql;},
+        get args(){return stmt.args;},
         async first(){
           if(sql.includes("FROM finance_products WHERE product_id"))return finance.some(p=>p.product_id===stmt.args[0]&&p.product_slug===stmt.args[1])?{ok:1}:null;
           if(sql.includes("FROM inventory_exclusions"))return null;
