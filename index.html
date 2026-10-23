@@ -651,17 +651,19 @@ async function loadHomepage() {
       throw new Error("Ошибка загрузки данных");
     }
 
-    const [categories, products] =
+    const [categories, allProducts] =
       await Promise.all(
         responses.map(r => r.json())
       );
 
     if (
       !Array.isArray(categories) ||
-      !Array.isArray(products)
+      !Array.isArray(allProducts)
     ) {
       throw new Error("Неверный формат каталога");
     }
+
+    const products = allProducts.filter(p => p && p.published === true);
 
     /* 1. ОСНОВНЫЕ КАТЕГОРИИ */
 
