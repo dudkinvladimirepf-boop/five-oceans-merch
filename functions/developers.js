@@ -1557,7 +1557,7 @@ async function restoreStock(context, form) {
   ).bind(slug,size).first();
   return exists
     ? "Позиция возвращена на рабочий склад (остатки сохранены)."
-    : "Позиция восстановлена. Нажми «Синхронизировать с Pages CMS», чтобы создать её с нулевым остатком.";
+    : "Позиция восстановлена. Если склада по этому размеру ещё нет, он появится после поступления через финансовый кабинет.";
 }
 
 async function trashProduct(context, form) {
@@ -1601,7 +1601,7 @@ async function restoreProduct(context, form) {
   ).bind(slug,JSON.stringify(allowedSizes)).run();
   return "Товар восстановлен из корзины. Позиций: " +
     Number(removed.meta?.changes || 0) +
-    ". Если некоторые позиции были удалены ранее, нажми кнопку синхронизации.";
+    ". Недостающие позиции склада создаются при новом поступлении из финансового кабинета.";
 }
 
 
@@ -1957,20 +1957,8 @@ async function dashboard(context, secret, options = {}) {
         ${renderStockFilters(stock,products,filters)}
         <p class="muted">Найдено позиций: ${number(filterStockRows(stock,products,filters).length)}.
           Счётчики выше показывают только рабочий склад.</p>
-        <div class="sync-area">
-          <p class="muted"><strong>Ручная синхронизация.</strong>
-            Только по нажатию этой кнопки CRM сверяет каталог Pages CMS,
-            добавляет новые размеры и цвета, а отсутствующие в Pages позиции
-            перемещает в «Корзину товаров». Ничего не удаляется физически.</p>
-          <form method="POST" action="/developers?tab=stock#stock">
-            ${hidden("action","sync")}
-            ${hidden("csrf",csrf)}
-            <button class="blue-button" type="submit"
-              onclick="return confirm('Сверить товары с Pages CMS? Отсутствующие в Pages позиции перейдут в Корзину товаров.');">
-              ↻ Синхронизировать с Pages CMS
-            </button>
-          </form>
-        </div>
+        <p class="muted">Новые товары создаются в Pages CMS, затем добавляются в финансовый учёт.
+          Остатки автоматически поступают на склад после оформления приёмки в финансовом кабинете.</p>
         ${reserveCheck.mismatches || reserveCheck.missing ? `
           <div class="warning">
             <strong>Обнаружено расхождение резервов.</strong>
