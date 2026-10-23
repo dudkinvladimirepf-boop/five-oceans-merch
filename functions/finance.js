@@ -19,7 +19,7 @@ const reply = (body, status=200) => new Response(body,{status,headers:{
   "Content-Type":"text/html; charset=utf-8",
   "Cache-Control":"no-store, private", "X-Robots-Tag":"noindex, nofollow",
   "X-Content-Type-Options":"nosniff", "X-Frame-Options":"DENY",
-  "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+  "Content-Security-Policy":"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 }});
 
 function cookieValue(request) {
@@ -173,16 +173,37 @@ function layout(content,title="Финансы") {
   'label{display:block;margin:10px 0 4px;font-size:13px}input,select{width:100%;padding:10px;border:1px solid #c2d0e0;border-radius:8px;background:white}'+
   'button,.btn{border:0;background:#e30613;color:white;padding:11px 16px;border-radius:8px;font-weight:700;cursor:pointer;display:inline-block;text-decoration:none;margin-top:12px}'+
   '.btn-secondary{background:#154e7a}.pill{padding:4px 7px;border-radius:12px;background:#e9edf4;font-size:11px}'+
+  '.combobox{position:relative}.suggestions{position:relative;background:#fff;border:1px solid #d3dfea;border-radius:8px;max-height:210px;overflow-y:auto;margin-top:4px}'+
+  '.suggestions[hidden]{display:none}.suggestions button{display:block;width:100%;text-align:left;margin:0;border:0;border-radius:0;background:white;color:#122b44;font-weight:normal;font-size:13px;padding:10px}'+
+  '.suggestions button:hover,.suggestions button:focus{background:#e9f2ff;outline:2px solid #adcbea}.field-help{font-size:12px;color:#506982;margin:5px 0}'+
   '@media(max-width:600px){h1{font-size:23px}.box{padding:12px}}</style></head><body><main>'+
   '<h1>Финансовый учёт мерча</h1><nav class="nav"><a href="/developers?tab=stock">Склад</a>'+
   '<a href="/developers?tab=orders">Заказы</a><a href="/finance">Финансы</a>'+
   '<a href="/finance?download=xlsx">Скачать Excel (.xlsx)</a><a href="/">Сайт</a></nav>'+
-  content+'</main></body></html>';
+  content+'</main><script src="/finance-forms.js" defer></script></body></html>';
 }
 function formStart(action,token){
   return '<form method="POST" action="/finance">'+
   '<input type="hidden" name="action" value="'+esc(action)+'">'+
   '<input type="hidden" name="csrf" value="'+esc(token)+'">';
+}
+// Only already-registered financial products can be received.
+function receiptCatalogChoices(products,financialProducts){
+  const registered=new Map(financialProducts.map(p=>[String(p.product_id),String(p.product_slug)]));
+  const choices=[];
+  for(const p of products){
+    if(registered.get(String(p.product_id))!==String(p.slug))continue;
+    for(const v of p.variants||[]){
+      for(const size of v.sizes||[]){
+        choices.push({
+          value:JSON.stringify([p.product_id,"v:"+v.code+"|"+size]),
+          label:p.title+" — "+v.label+" / "+size,
+          search:[p.title,p.slug,v.label,v.code,size].join(" ")
+        });
+      }
+    }
+  }
+  return choices;
 }
 function options(rows,valFn,labelFn){
   return rows.map(x=>'<option value="'+esc(valFn(x))+'">'+esc(labelFn(x))+'</option>').join("");
@@ -213,12 +234,8 @@ function show(data,summary,products,token,notice,error,filters={}) {
     summary.productRows.map(p=>'<tr><td>'+esc(p.title)+'<br><small>'+esc(p.product_slug)+'</small></td><td>'+money(p.list_price)+'</td><td>'+(p.purchaseUnitCost===null?'—':money(p.purchaseUnitCost))+'</td><td>'+p.openingQty+'</td><td>'+p.purchased+'</td><td>'+p.consignment+'</td>'+
       '<td>'+p.sold+'</td><td>'+money(p.revenue)+'</td><td>'+money(p.cost)+'</td><td>'+money(p.due)+'</td>'+
       '<td>'+p.missing+'</td></tr>').join("")+'</table></div></div>';
-  const supplierOptions=options(data.suppliers,x=>x.id,x=>x.name);
-  const catalogOptions=products.filter(p=>p.finance_enabled===true)
-    .flatMap(p=>(p.variants||[]).flatMap(v=>(v.sizes||[]).map(size=>{
-      const stockSize="v:"+v.code+"|"+size;
-      return {value:JSON.stringify([p.product_id,stockSize]),label:p.title+" — "+v.label+" / "+size};
-    })));
+  const catalogOptions=receiptCatalogChoices(products,data.products);
+  const supplierOptions=options(data.suppliers,x=>x.name,x=>x.name);
   const receiptOpts=options(summary.rows.filter(r=>Number(r.is_opening||0)!==1),r=>r.id,r=>"#"+r.id+" "+(r.batch_name||"Без названия")+" · "+r.product_slug+" / "+r.stock_size+" · "+r.supplier);
   const supplierFilter=String(filters.supplier||"");
   const batchFilter=String(filters.batch||"");
@@ -251,20 +268,31 @@ function show(data,summary,products,token,notice,error,filters={}) {
      '<button type="submit" class="btn-secondary">Перенести существующие товары и остатки (один раз)</button></form>')+
      '</div>';
   html+='<h2>Добавить операцию</h2><div class="forms">'+
-    '<div class="box"><h3>Поставщик</h3>'+formStart("supplier",token)+
-      '<label>Название поставщика<input name="name" maxlength="140" required></label>'+
-      '<button>Добавить поставщика</button></form></div>'+
-    '<div class="box"><h3>Поступление на склад</h3><p class="muted">Вносите только после фактической приёмки. '+'Остаток увеличится автоматически, но карточка останется скрытой до публикации в Pages.</p>'+
+    '<div class="box"><h3>Поступление на склад</h3>'+
+      '<p class="muted">И для первой приёмки, и для пополнения старых товаров. При подтверждении количество автоматически увеличится в CRM. Публикация товара на сайте управляется в Pages отдельно.</p>'+
       formStart("receipt",token)+
-      '<label>Товар и размер<select name="sku" required>'+options(catalogOptions,x=>x.value,x=>x.label)+'</select></label>'+
-      '<label>Поставщик<select name="supplier" required>'+supplierOptions+'</select></label>'+
+      '<label for="receipt-sku-select">Товар, цвет и размер — выбрать из списка</label>'+
+      '<select id="receipt-sku-select" name="sku" required>'+
+      '<option value="">— Выберите товар, цвет и размер —</option>'+
+      options(catalogOptions,x=>x.value,x=>x.label)+'</select>'+
+      '<div class="combobox"><label for="receipt-sku-search">Или найти товар по названию / ввести вручную</label>'+
+      '<input id="receipt-sku-search" type="search" autocomplete="off" placeholder="Например: футболка, Не как все, ne..." aria-controls="receipt-sku-suggestions">'+
+      '<div id="receipt-sku-suggestions" class="suggestions" role="listbox" hidden></div></div>'+
+      '<p class="field-help">Начните печатать — появятся подходящие товары и размеры. Выберите подсказку. Для совершенно нового товара сначала создайте карточку в Pages и синхронизируйте с финансами.</p>'+
+      '<label for="receipt-supplier-select">Поставщик — выбрать из списка</label>'+
+      '<select id="receipt-supplier-select"><option value="">— Новый или не выбран —</option>'+
+      supplierOptions+'</select>'+
+      '<div class="combobox"><label for="receipt-supplier-input">Или ввести название поставщика</label>'+
+      '<input id="receipt-supplier-input" name="supplier_name" type="text" required maxlength="140" autocomplete="off" placeholder="Начните печатать или укажите нового поставщика" aria-controls="receipt-supplier-suggestions">'+
+      '<div id="receipt-supplier-suggestions" class="suggestions" role="listbox" hidden></div></div>'+
+      '<p class="field-help">Известный поставщик выбирается из списка или по подсказке. Если название новое, оно сохранится автоматически при приёмке.</p>'+
       '<label>Название партии у поставщика<input name="batch_name" value="Партия № 1" maxlength="150" required></label>'+
       '<label>Тип договора<select name="ownership"><option value="purchase">Выкупили</option>'+
       '<option value="consignment">Под реализацию</option></select></label>'+
       '<label>Количество<input name="quantity" type="number" min="1" max="1000000" required></label>'+
       '<label>Закупочная цена / выплата за штуку (₽)<input name="unit_cost" type="number" min="0" max="100000000" required></label>'+
       '<label>Примечание<input name="note" maxlength="250"></label>'+
-      '<button '+(!supplierOptions||!catalogOptions.length?'disabled':'')+'>Подтвердить приёмку</button></form></div>'+
+      '<button '+(!catalogOptions.length?'disabled':'')+'>Подтвердить приёмку</button></form></div>'+
     '<div class="box"><h3>Оплата поставщику</h3>'+formStart("payment",token)+
       '<label>Партия<select name="receipt_id">'+receiptOpts+'</select></label>'+
       '<label>Выплачено (₽)<input name="amount" type="number" min="1" required></label>'+
@@ -399,6 +427,22 @@ async function reconcileOpeningCosts(db) {
     " записей. Остатки и другие партии не изменены.";
 }
 
+async function resolveSupplierName(db,input,legacyId){
+  let raw=text(input).trim();
+  // Support submissions from a previously opened version of the old form.
+  if(!raw && legacyId){
+    const id=int(legacyId,1,100000000,"поставщик");
+    const existing=await db.prepare("SELECT name FROM finance_suppliers WHERE id=?").bind(id).first();
+    if(!existing)throw Error("Поставщик не найден.");
+    raw=String(existing.name);
+  }
+  if(!raw||raw.length>140||/[\x00-\x1f\x7f]/.test(raw))
+    throw Error("Введите корректное название поставщика (до 140 символов).");
+  const suppliers=await db.prepare("SELECT name FROM finance_suppliers").all();
+  const match=(suppliers.results||[]).find(p=>String(p.name).trim().toLocaleLowerCase("ru")===raw.toLocaleLowerCase("ru"));
+  return match?String(match.name):raw;
+}
+
 async function perform(context,form) {
   const db=context.env.DB, action=text(form.get("action"));
   if(action==="opening-import")return importOpening(context);
@@ -423,17 +467,17 @@ async function perform(context,form) {
     if(!Array.isArray(sku)||sku.length!==2)throw Error("Неверная комбинация товара и размера.");
     const productId=text(sku[0]),size=text(sku[1]);
     const available=await catalog(context);
-    const product=available.find(p=>p.product_id===productId && p.finance_enabled===true);
-    if(!product)throw Error("Товар не выбран для финансового учёта в Pages.");
+    const product=available.find(p=>p.product_id===productId);
+    if(!product)throw Error("Товар не найден в Pages. Сначала создайте карточку в Pages.");
     const valid=(product.variants||[]).some(v=>(v.sizes||[]).some(s=>"v:"+v.code+"|"+s===size));
     if(!valid)throw Error("Размер или цвет больше не существует в Pages.");
     const imported=await db.prepare("SELECT 1 AS ok FROM finance_products WHERE product_id=? AND product_slug=?").bind(productId,product.slug).first();
     if(!imported)throw Error("Сначала синхронизируйте карточку товара в разделе «Финансы».");
     const excluded=await db.prepare("SELECT 1 AS ok FROM inventory_exclusions WHERE product_slug=? AND size=?").bind(product.slug,size).first();
     if(excluded)throw Error("Позиция находится в корзине склада. Сначала восстановите её в CRM.");
-    const supplier=int(form.get("supplier"),1,100000000,"поставщик");
-    const name=await db.prepare("SELECT id FROM finance_suppliers WHERE id=?").bind(supplier).first();
-    if(!name)throw Error("Поставщик не найден.");
+    const providerInput=text(form.get("supplier_name")).replace(/\s+/g," ").trim();
+    const supplierName=await resolveSupplierName(db,providerInput,form.get("supplier"));
+    if(!supplierName)throw Error("Укажите поставщика: выберите из списка или введите новое название.");
     const ownership=text(form.get("ownership"));
     if(!["purchase","consignment"].includes(ownership))throw Error("Выберите тип договора.");
     const qty=int(form.get("quantity"),1,1000000,"количество");
@@ -442,11 +486,14 @@ async function perform(context,form) {
     const batchName=text(form.get("batch_name")).trim();
     if(!batchName||batchName.length>150)throw Error("Укажите название партии поставщика.");
     await db.batch([
-      db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) VALUES(?,?)")
-        .bind(supplier,batchName),
+      db.prepare("INSERT OR IGNORE INTO finance_suppliers(name) VALUES(?)").bind(supplierName),
+      db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) "+
+        "SELECT s.id,? FROM finance_suppliers s WHERE s.name=?")
+        .bind(batchName,supplierName),
       db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note) "+
-        "SELECT ?,?,?,?,b.id,?,?,?,? FROM finance_batches b WHERE b.supplier_id=? AND b.name=?")
-        .bind(productId,product.slug,size,supplier,ownership,qty,cost,note,supplier,batchName),
+        "SELECT ?,?,?,s.id,b.id,?,?,?,? FROM finance_suppliers s "+
+        "JOIN finance_batches b ON b.supplier_id=s.id AND b.name=? WHERE s.name=?")
+        .bind(productId,product.slug,size,ownership,qty,cost,note,batchName,supplierName),
       db.prepare("INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP")
         .bind(product.slug,productId,size,qty)
     ]);

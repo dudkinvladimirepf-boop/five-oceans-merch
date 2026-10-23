@@ -7,6 +7,8 @@ on:
       - "finance.test.cjs"
       - "finance-opening.test.cjs"
       - "finance-price-correction.test.cjs"
+      - "finance-receipt-ui.test.cjs"
+      - "finance-forms.js"
       - "migrations/2026-10-23-finance-opening-batches.sql"
       - "functions/developers.js"
       - "data/products.json"
@@ -25,5 +27,6 @@ jobs:
         with:
           node-version: "22"
       - run: node --check functions/finance.js
+      - run: node --check finance-forms.js
       - run: node --check functions/api/finance/import.js
-      - run: node --test finance.test.cjs finance-opening.test.cjs finance-price-correction.test.cjs checkout.test.cjs inventory-sync.test.cjs
+      - run: node --test finance.test.cjs finance-opening.test.cjs finance-price-correction.test.cjs finance-receipt-ui.test.cjs checkout.test.cjs inventory-sync.test.cjs
