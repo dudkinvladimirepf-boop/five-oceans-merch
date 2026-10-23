@@ -208,6 +208,121 @@ function receiptCatalogChoices(products,financialProducts){
 function options(rows,valFn,labelFn){
   return rows.map(x=>'<option value="'+esc(valFn(x))+'">'+esc(labelFn(x))+'</option>').join("");
 }
+
+const TEST_CRM={id:"b3ec1243-b170-4d8c-94b6-2a7feef4b9fe",slug:"test_crm",title:"ТЕСТ CRM — удалить после проверки"};
+const dbRows=(r)=>r?.results||[];
+// Snapshot only target records. All rows are read before deleting anything.
+async function testCleanupSnapshot(db){
+  const id=TEST_CRM.id,slug=TEST_CRM.slug;
+  const [financeProducts,receipts,orders,items,inventory,exclusions,payments]=await Promise.all([
+    db.prepare("SELECT * FROM finance_products WHERE product_id=? OR product_slug=?").bind(id,slug).all(),
+    db.prepare("SELECT * FROM finance_receipts WHERE product_id=? OR product_slug=?").bind(id,slug).all(),
+    db.prepare("SELECT o.* FROM orders o WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id=o.order_id AND (oi.product_id=? OR oi.product_slug=?))").bind(id,slug).all(),
+    db.prepare("SELECT * FROM order_items WHERE product_id=? OR product_slug=? OR order_id IN (SELECT order_id FROM order_items WHERE product_id=? OR product_slug=?)").bind(id,slug,id,slug).all(),
+    db.prepare("SELECT * FROM inventory WHERE product_id=? OR product_slug=?").bind(id,slug).all(),
+    db.prepare("SELECT * FROM inventory_exclusions WHERE product_id=? OR product_slug=?").bind(id,slug).all(),
+    db.prepare("SELECT pay.* FROM finance_supplier_payments pay JOIN finance_receipts r ON r.id=pay.receipt_id WHERE r.product_id=? OR r.product_slug=?").bind(id,slug).all()
+  ]);
+  const relevantReceipts=dbRows(receipts);
+  const refs=[...new Set(relevantReceipts.map(r=>r.batch_id).filter(Boolean))];
+  const supplierIds=[...new Set(relevantReceipts.map(r=>r.supplier_id).filter(Boolean))];
+  const extra=await Promise.all([
+    db.prepare("SELECT * FROM finance_batches WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))").bind(JSON.stringify(refs)).all(),
+    db.prepare("SELECT * FROM finance_suppliers WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))").bind(JSON.stringify(supplierIds)).all()
+  ]);
+  return {
+    identity:TEST_CRM,exported_at:new Date().toISOString(),
+    finance_products:dbRows(financeProducts),finance_receipts:relevantReceipts,
+    finance_supplier_payments:dbRows(payments),
+    finance_batches:dbRows(extra[0]),finance_suppliers:dbRows(extra[1]),
+    orders:dbRows(orders),order_items:dbRows(items),
+    inventory:dbRows(inventory),inventory_exclusions:dbRows(exclusions),
+    warning:"Прочие расходы finance_expenses не связаны с товаром или партией. Автоматически их определять и удалять небезопасно."
+  };
+}
+function testCleanupValidate(snapshot){
+  const {id,slug}=TEST_CRM;
+  const matching=(r)=>String(r.product_id||"")===id&&String(r.product_slug||"")===slug;
+  for(const group of ["finance_products","finance_receipts","inventory","order_items"]){
+    if(snapshot[group].some(r=>!matching(r)))
+      throw Error("Есть строки с совпавшим названием/ID, но другим товаром: "+group+". Удаление остановлено.");
+  }
+  for(const row of snapshot.inventory_exclusions){
+    if(row.product_slug!==slug||(row.product_id&&row.product_id!==id))
+      throw Error("Несовпадение складского исключения — удаление остановлено.");
+  }
+  for(const row of snapshot.finance_receipts){
+    if(Number(row.is_opening||0)!==0)
+      throw Error("Начальная партия не должна удаляться автоматически.");
+  }
+  if(snapshot.orders.some(o=>o.status==="reserved"))
+    throw Error("Есть заказ в активном резерве. Сначала отмените тестовый резерв через CRM.");
+  const orderIds=new Set(snapshot.orders.map(x=>x.order_id));
+  if(snapshot.order_items.some(x=>!orderIds.has(x.order_id)))
+    throw Error("Найдены строки заказов без соответствующих заказов. Удаление остановлено.");
+  if(snapshot.inventory.some(x=>Number(x.reserved_quantity)!==0))
+    throw Error("В тестовом товаре ещё есть резерв. Сначала освободите его в CRM.");
+  if(snapshot.finance_products.length>1||snapshot.orders.length>10||
+     snapshot.inventory.length>10||snapshot.finance_receipts.length>30||
+     snapshot.order_items.length>30)
+    throw Error("Неожиданно много тестовых записей — необходима ручная проверка.");
+  return orderIds.size;
+}
+function testCleanupCounts(s){
+  return ["finance_products","finance_receipts","finance_supplier_payments","orders","order_items","inventory","inventory_exclusions"]
+   .map(name=>name+": "+s[name].length).join("; ");
+}
+async function testCleanupDelete(db,form){
+  if(text(form.get("test_cleanup_confirmation")).trim()!=="УДАЛИТЬ ТЕСТ CRM"||
+     text(form.get("test_cleanup_backup_confirm"))!=="yes")
+    throw Error("Сначала сохраните файл резервной копии, затем введите точную фразу УДАЛИТЬ ТЕСТ CRM.");
+  const s=await testCleanupSnapshot(db);
+  testCleanupValidate(s);
+  if(s.finance_products.length!==1)
+    throw Error("Тестовая карточка финансов не найдена; повторная очистка не требуется.");
+  const orderIds=s.orders.map(x=>x.order_id), batchIds=s.finance_batches.map(b=>b.id);
+  const supplierIds=s.finance_suppliers.map(x=>x.id);
+  const id=TEST_CRM.id, slug=TEST_CRM.slug;
+  const statements=[
+    db.prepare("DELETE FROM finance_supplier_payments WHERE receipt_id IN (SELECT id FROM finance_receipts WHERE product_id=? AND product_slug=?)").bind(id,slug),
+    db.prepare("DELETE FROM finance_receipts WHERE product_id=? AND product_slug=? AND is_opening=0").bind(id,slug),
+    db.prepare("DELETE FROM finance_products WHERE product_id=? AND product_slug=?").bind(id,slug),
+    db.prepare("DELETE FROM order_items WHERE product_id=? AND product_slug=?").bind(id,slug),
+    db.prepare("DELETE FROM orders WHERE order_id IN (SELECT value FROM json_each(?)) AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id=orders.order_id)").bind(JSON.stringify(orderIds)),
+    db.prepare("DELETE FROM inventory_exclusions WHERE product_slug=? AND (product_id=? OR product_id IS NULL)").bind(slug,id),
+    db.prepare("DELETE FROM inventory WHERE product_slug=? AND product_id=? AND reserved_quantity=0").bind(slug,id),
+    db.prepare("DELETE FROM finance_batches WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)) AND NOT EXISTS (SELECT 1 FROM finance_receipts r WHERE r.batch_id=finance_batches.id)").bind(JSON.stringify(batchIds)),
+    db.prepare("DELETE FROM finance_suppliers WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)) AND (lower(name) LIKE '%тест%' OR lower(name) LIKE '%test%') AND NOT EXISTS (SELECT 1 FROM finance_receipts r WHERE r.supplier_id=finance_suppliers.id)").bind(JSON.stringify(supplierIds))
+  ];
+  // D1.batch executes these statements in one atomic transaction.
+  await db.batch(statements);
+  return "Тест CRM очищен из заказов, финансов и склада. "+
+    "Товар с сайта исключён через GitHub. "+testCleanupCounts(s)+
+    ". Несвязанные прочие расходы не изменялись.";
+}
+function showTestCleanup(s,token){
+  if(!s.finance_products.length&&!s.inventory.length&&!s.orders.length&&!s.finance_receipts.length)return "";
+  const counts=testCleanupCounts(s);
+  const orderIds=s.orders.map(o=>o.order_id+" ("+o.status+")").join(", ")||"Нет";
+  let guard="";
+  try{testCleanupValidate(s);}catch(e){guard='<p class="error">'+esc(e.message)+'</p>';}
+  return '<div class="box"><h2>Завершить проверку: удалить ТЕСТ CRM</h2>'+
+    '<p class="warn">Только товар <strong>'+esc(TEST_CRM.title)+'</strong> ('+esc(TEST_CRM.slug)+'). '+
+    'Перед очисткой сохраните резервную копию данных и контрольную точку D1 Time Travel. '+
+    'Удалённые записи не восстановятся автоматически.</p>'+
+    '<p>Будет затронуто: '+esc(counts)+'</p>'+
+    '<p>Тестовые заказы: '+esc(orderIds)+'</p>'+
+    '<p class="muted">Поставщики и партии, используемые настоящими товарами, не удаляются. '+
+    'Прочие расходы без связи с заказом остаются: система не может надёжно определить, какие из них тестовые.</p>'+
+    '<a class="btn btn-secondary" href="/finance?download=test-cleanup-json">Скачать резервную копию тестовых записей (.json)</a>'+
+    guard+
+    (guard?'':formStart("test-cleanup",token)+
+    '<label><input type="checkbox" name="test_cleanup_backup_confirm" value="yes" required style="width:auto"> Резервная копия сохранена, контрольная точка D1 проверена</label>'+
+    '<label>Для подтверждения напечатайте: УДАЛИТЬ ТЕСТ CRM<input name="test_cleanup_confirmation" required autocomplete="off"></label>'+
+    '<button type="submit" onclick="return confirm(\'Удалить тестовые заказы, финансовые партии и остатки товара test_crm?\')">Удалить только ТЕСТ CRM</button></form>')+
+    '</div>';
+}
+
 function show(data,summary,products,token,notice,error,filters={}) {
   const taxInfo='<p class="muted">Налог — предварительный управленческий расчёт 6% от выручки по заказам со статусом «Оплачен».'+
     ' Это не налоговая декларация: дата фактического получения денег, возвраты, комиссии и условия договора требуют проверки.</p>';
@@ -254,6 +369,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       formStart("reconcile-opening-costs",token)+
       '<button type="submit" class="btn-secondary">Исправить закупочные цены начальных партий</button></form></div>';
   }
+  html+=showTestCleanup(data.testCleanup||{finance_products:[],inventory:[],orders:[],finance_receipts:[]},token);
   html+='<div class="box"><h2>Начальный перенос существующих товаров</h2>'+
     (data.opening ?
      '<p class="ok">Начальная партия перенесена '+esc(data.opening.snapshot_at)+
@@ -512,6 +628,12 @@ async function settleExisting(db,form){
 
 async function perform(context,form) {
   const db=context.env.DB, action=text(form.get("action"));
+  if(action==="test-cleanup"){
+    const available=await catalog(context);
+    if(available.some(p=>p.product_id===TEST_CRM.id||p.slug===TEST_CRM.slug))
+      throw Error("Тестовый товар ещё присутствует в Pages. Сначала дождитесь публикации PR с его удалением.");
+    return testCleanupDelete(db,form);
+  }
   if(action==="opening-import")return importOpening(context);
   if(action==="reconcile-opening-costs")return reconcileOpeningCosts(db);
   if(action==="import"){
@@ -619,7 +741,19 @@ export async function onRequestGet(context){
     const data=await records(context.env.DB), report=calculate(data);
     const query=new URL(context.request.url).searchParams;
     if(query.get("download")==="xlsx")return excelDownload(data,report);
+    if(query.get("download")==="test-cleanup-json"){
+      const snapshot=await testCleanupSnapshot(context.env.DB);
+      testCleanupValidate(snapshot);
+      return new Response(JSON.stringify(snapshot,null,2),{status:200,headers:{
+        "Content-Type":"application/json; charset=utf-8",
+        "Content-Disposition":'attachment; filename="test-crm-backup.json"',
+        "Cache-Control":"private, no-store",
+        "X-Content-Type-Options":"nosniff"
+      }});
+    }
     const catalogProducts=await catalog(context);
+    if(data.products.some(p=>p.product_id===TEST_CRM.id))
+      data.testCleanup=await testCleanupSnapshot(context.env.DB);
     return reply(show(data,report,catalogProducts,await csrf(context.request,secret),query.get("notice")||"","",{supplier:query.get("supplier"),batch:query.get("batch")}));
   }catch(error){
     console.error("Finance GET",error);
@@ -648,6 +782,8 @@ export async function onRequestPost(context){
     console.error("Finance POST",error);
     try{
       const [data,products]=await Promise.all([records(context.env.DB),catalog(context)]);
+      if(data.products.some(p=>p.product_id===TEST_CRM.id))
+        data.testCleanup=await testCleanupSnapshot(context.env.DB);
       return reply(show(data,calculate(data),products,await csrf(context.request,secret),"",error.message),400);
     }catch{
       return reply(layout('<p class="error">'+esc(error.message)+'</p><a href="/finance">Назад</a>'),400);
