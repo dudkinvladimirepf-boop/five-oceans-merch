@@ -51,6 +51,7 @@ test("nine existing products are priced by immutable IDs; new goods excluded",as
   const {LEGACY_UNIT_COSTS}=await api();
   assert.equal(LEGACY_UNIT_COSTS.size,9);
   const check={"hudi-klub-5-okeanov":2950,
+    "svitshot-klub-5-okeanov":2175,
     "svitshot-klub-5-okeanov":2285,
     "shapka-polosatka":700};
   for(const [slug,cost] of Object.entries(check)){
