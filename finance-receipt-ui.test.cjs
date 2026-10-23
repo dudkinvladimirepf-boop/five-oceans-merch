@@ -102,7 +102,7 @@ test("existing product receipt accepts new supplier and does not touch Pages cat
   const sim=mockContext();
   const size="v:red|46-48";
   const message=await perform(sim.context,submit(JSON.stringify([old.product_id,size]),"Новая фабрика"));
-  assert.match(message,/Остаток увеличен на 5/);
+  assert.match(message,/\+5 шт\. на складе/);
   assert.equal(sim.queries.length,4);
   assert.match(sim.queries[0][0],/INSERT OR IGNORE INTO finance_suppliers/);
   assert.deepEqual(sim.queries[0][1],["Новая фабрика"]);
