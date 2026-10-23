@@ -21,11 +21,11 @@ const syncCatalog = vm.runInContext("syncCatalog", runtime);
 const SHIRT_ID = "a1e8f4b3-8bca-4868-a95c-efac003b16e0";
 const HAT_ID = "a75a90a1-8534-46c8-b94b-6f278fc7c7dd";
 const shirt = {
-  slug: "futbolka", product_id: SHIRT_ID, title: "Футболка",
+  slug: "futbolka", product_id: SHIRT_ID, title: "Футболка", published: true,
   variants: [{ code: "red", sizes: ["L"] }]
 };
 const hat = {
-  slug: "shapka-polosatka", product_id: HAT_ID, title: "Шапка «Полосатка»",
+  slug: "shapka-polosatka", product_id: HAT_ID, title: "Шапка «Полосатка»", published: true,
   variants: [{ code: "navy-white", sizes: ["Без размера"] }]
 };
 const shirtStock = {
