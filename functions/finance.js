@@ -384,23 +384,25 @@ async function importOpening(context) {
     "Остатки не изменялись; долг поставщику не начислялся.";
 }
 
+async function reconcileOpeningCosts(db) {
+  const opening=await db.prepare("SELECT id FROM finance_opening_state WHERE id='legacy-v1'").first();
+  if(!opening)throw Error("Начальный перенос ещё не выполнялся.");
+  const prices=JSON.stringify([...LEGACY_UNIT_COSTS]);
+  const result=await db.prepare(
+    "WITH prices AS (SELECT json_extract(value,'$[0]') AS pid,"+
+    "CAST(json_extract(value,'$[1]') AS INTEGER) AS unit_cost FROM json_each(?)) "+
+    "UPDATE finance_receipts AS r SET unit_cost=prices.unit_cost "+
+    "FROM prices WHERE r.product_id=prices.pid AND r.is_opening=1 "+
+    "AND r.unit_cost<>prices.unit_cost"
+  ).bind(prices).run();
+  return "Закупочные цены начальных партий сверены: обновлено "+Number(result.meta?.changes||0)+
+    " записей. Остатки и другие партии не изменены.";
+}
+
 async function perform(context,form) {
   const db=context.env.DB, action=text(form.get("action"));
   if(action==="opening-import")return importOpening(context);
-  if(action==="reconcile-opening-costs"){
-    const opening=await db.prepare("SELECT id FROM finance_opening_state WHERE id='legacy-v1'").first();
-    if(!opening)throw Error("Начальный перенос ещё не выполнялся.");
-    const source=JSON.stringify([...LEGACY_UNIT_COSTS]);
-    const result=await db.prepare(
-      "WITH prices AS (SELECT json_extract(value,'$[0]') AS pid,"+
-      "CAST(json_extract(value,'$[1]') AS INTEGER) AS unit_cost FROM json_each(?)) "+
-      "UPDATE finance_receipts AS r SET unit_cost=prices.unit_cost "+
-      "FROM prices WHERE r.product_id=prices.pid AND r.is_opening=1 "+
-      "AND r.unit_cost<>prices.unit_cost"
-    ).bind(source).run();
-    return "Закупочные цены начальных партий сверены: обновлено "+Number(result.meta?.changes||0)+
-      " записей. Остатки и другие партии не изменены.";
-  }
+  if(action==="reconcile-opening-costs")return reconcileOpeningCosts(db);
   if(action==="import"){
     const items=(await catalog(context)).filter(p=>p.finance_enabled===true &&
       /^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(text(p.product_id)) && p.slug && p.title)
