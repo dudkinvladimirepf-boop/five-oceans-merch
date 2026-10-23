@@ -655,3 +655,5 @@ body:not(.home-page) .category-promo { color:var(--muted); }
   .color-swatches {gap:15px;}
   .color-swatch {width:35px;height:35px;}
 }
+
+/* Cloudflare Git connection check: 2026-10-23; no visual changes. */
