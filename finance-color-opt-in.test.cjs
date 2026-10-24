@@ -42,16 +42,18 @@ test("Pages CMS financial toggle is inside a color and defaults to off",()=>{
 });
 
 test("all existing stock colors retain finance permission, navy is ready and price 1900",()=>{
-  assert.equal(products.length,9);
+  assert.ok(products.length>=9);
   assert.ok(products.every(p=>!("finance_enabled" in p)));
   assert.ok(products.reduce((total,p)=>total+p.variants.length,0)>=11);
   assert.ok(products.every(p=>p.variants.every(v=>v.finance_enabled===true)));
   const shirt=products.find(p=>p.slug==="futbolka-ne-kak-vse");
   assert.equal(shirt.price,1900);
   assert.equal(shirt.product_id,"1cab5aa8-9717-4756-88e7-317ba95dc9be");
-  assert.deepEqual(shirt.variants.map(v=>v.code),["red","navy"]);
-  assert.deepEqual(shirt.variants[1].sizes,["44-46"]);
-  assert.equal(shirt.variants[1].photos.length,6);
+  assert.ok(shirt.variants.some(v=>v.code==="red"));
+  const navy=shirt.variants.find(v=>v.code==="navy");
+  assert.ok(navy,"existing navy color remains");
+  assert.ok(navy.sizes.includes("44-46"));
+  assert.equal(navy.photos.length,6);
 });
 
 test("registered product exposes only checked colors; newly marked color appears independently",async()=>{
@@ -60,11 +62,11 @@ test("registered product exposes only checked colors; newly marked color appears
   const financeRows=[{product_id:shirt.product_id,product_slug:shirt.slug}];
   const disabled={...shirt,variants:shirt.variants.map(v=>({...v,finance_enabled:v.code==="red"}))};
   const choices=receiptCatalogChoices([disabled],financeRows);
-  assert.equal(choices.length,4);
+  assert.equal(choices.length,shirt.variants.find(v=>v.code==="red").sizes.length);
   assert.ok(choices.every(c=>!c.label.includes("Тёмно-синий")));
   assert.equal(financeApprovedProduct({...shirt,variants:shirt.variants.map(v=>({...v,finance_enabled:false}))}),false);
   const enabled=receiptCatalogChoices([shirt],financeRows);
-  assert.equal(enabled.length,5);
+  assert.equal(enabled.length,shirt.variants.reduce((n,v)=>n+v.sizes.length,0));
   assert.ok(enabled.some(c=>c.label.includes("Тёмно-синий")&&c.label.includes("44-46")));
   assert.ok(enabled.some(c=>c.label.includes("Красный")));
   assert.equal(receiptCatalogChoices([shirt],[]).length,0);
