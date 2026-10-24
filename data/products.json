@@ -348,7 +348,9 @@
         ],
         "sizes": [
           "48-50",
-          "50-52"
+          "50-52",
+          "54-56",
+          "44-46"
         ],
         "finance_enabled": true,
         "available": true,
