@@ -76,10 +76,10 @@ test("homepage showcase cards link to precisely the color shown and never exceed
 });
 
 test("homepage reverses layout prominence and leaves full-collection links",()=>{
-  assert.match(style,/#new-arrivals \.categories\s*\{\s*grid-template-columns:repeat\(auto-fit,minmax\(270px,1fr\)\)/);
+  assert.match(style,/#new-arrivals \.categories\s*\{\s*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(style,/#featured \.categories\s*\{\s*grid-template-columns:repeat\(auto-fill,minmax\(170px,220px\)\)/);
   assert.match(style,/#new-arrivals \.category-info\s*\{[\s\S]*?position:absolute;/);
-  assert.match(style,/@media\s*\(max-width:650px\)[\s\S]*?#new-arrivals \.categories\s*\{\s*grid-template-columns:1fr/);
+  assert.match(style,/@media\s*\(max-width:650px\)[\s\S]*?#new-arrivals \.categories\s*\{\s*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(page,/id === "new-arrivals" \? "Все новинки →" : "Весь наш выбор →"/);
   assert.match(page,/\/search\.html\?collection=/);
 });
