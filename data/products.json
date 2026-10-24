@@ -187,8 +187,27 @@
           "56-58"
         ],
         "available": true,
-        "featured": true,
+        "featured": false,
         "new_arrival": true
+      },
+      {
+        "code": "navy",
+        "label": "Тёмно-синий",
+        "hex": "#232B48",
+        "photos": [
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-140952-1.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-140959-2-2.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141002-3-1.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141005-4.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141008-5.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141010-6.png"
+        ],
+        "sizes": [
+          "44-46"
+        ],
+        "available": true,
+        "featured": true,
+        "new_arrival": false
       }
     ]
   },
