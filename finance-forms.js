@@ -108,6 +108,95 @@
     const oldSku=document.getElementById("receipt-sku-select");
     const oldSearch=document.getElementById("receipt-sku-search");
     const oldQty=document.getElementById("receipt-legacy-qty");
+    const groupSearch=document.getElementById("receipt-group-search");
+    const groupToggle=document.getElementById("receipt-group-toggle");
+    const groupPopup=document.getElementById("receipt-group-suggestions");
+    function connectGroupPicker(){
+      if(!group||!groupSearch||!groupToggle||!groupPopup)return;
+      const all=Array.from(group.options).filter(o=>o.value).map(o=>({
+        value:o.value,label:o.textContent.trim(),key:normalize(o.textContent)
+      }));
+      function close(){
+        groupPopup.hidden=true;
+        groupPopup.replaceChildren();
+        groupSearch.setAttribute("aria-expanded","false");
+        groupToggle.setAttribute("aria-expanded","false");
+      }
+      function choose(item){
+        group.value=item.value;
+        groupSearch.value=item.label;
+        groupSearch.setCustomValidity("");
+        group.dispatchEvent(new Event("change",{bubbles:true}));
+        close();
+        groupSearch.focus();
+      }
+      function render(items){
+        groupPopup.replaceChildren();
+        if(!items.length){
+          const message=document.createElement("p");
+          message.className="field-help";
+          message.textContent="Совпадений нет. Новый товар сначала добавьте через Pages CMS.";
+          groupPopup.append(message);
+        }
+        for(const item of items){
+          const button=document.createElement("button");
+          button.type="button";
+          button.setAttribute("role","option");
+          button.textContent=item.label;
+          button.addEventListener("click",()=>choose(item));
+          groupPopup.append(button);
+        }
+        groupPopup.hidden=false;
+        groupSearch.setAttribute("aria-expanded","true");
+        groupToggle.setAttribute("aria-expanded","true");
+      }
+      groupSearch.addEventListener("input",()=>{
+        group.value="";
+        group.dispatchEvent(new Event("change",{bubbles:true}));
+        groupSearch.setCustomValidity("");
+        if(groupSearch.value.trim())render(resultsFor(all,groupSearch.value));
+        else close();
+      });
+      groupToggle.addEventListener("click",()=>{
+        if(groupPopup.hidden)render(all);
+        else close();
+        groupSearch.focus();
+      });
+      groupSearch.addEventListener("keydown",event=>{
+        if(event.key==="Escape"){close();return;}
+        if(event.key==="ArrowDown"){
+          if(groupPopup.hidden)render(all);
+          const first=groupPopup.querySelector("button");
+          if(first){event.preventDefault();first.focus();}
+        }
+        if(event.key==="Enter"&&!groupPopup.hidden){
+          const first=groupPopup.querySelector("button");
+          if(first){event.preventDefault();first.click();}
+        }
+      });
+      groupPopup.addEventListener("keydown",event=>{
+        const buttons=Array.from(groupPopup.querySelectorAll("button"));
+        const index=buttons.indexOf(document.activeElement);
+        if(event.key==="Escape"){event.preventDefault();close();groupSearch.focus();}
+        if(event.key==="ArrowDown"&&index>=0){
+          event.preventDefault();buttons[Math.min(index+1,buttons.length-1)].focus();
+        }
+        if(event.key==="ArrowUp"&&index>=0){
+          event.preventDefault();if(index===0)groupSearch.focus();else buttons[index-1].focus();
+        }
+      });
+      document.addEventListener("click",event=>{
+        if(!groupPopup.parentElement.contains(event.target))close();
+      });
+      const form=group.closest("form");
+      form?.addEventListener("submit",event=>{
+        if(group.disabled||group.value)return;
+        event.preventDefault();
+        groupSearch.setCustomValidity("Выберите существующий товар и цвет из подсказки или полного списка.");
+        groupSearch.reportValidity();
+        groupSearch.focus();
+      });
+    }
     function showSizes(){
       if(!group||!sizesBox)return;
       const option=group.selectedOptions[0];
@@ -139,13 +228,16 @@
       const receiving=document.getElementById("finance-operation-mode")?.value!=="settlement";
       const single=Boolean(legacy?.open);
       if(!intake)return;
-      if(group){group.disabled=!receiving||single;group.required=receiving&&!single;}
+      if(group)group.disabled=!receiving||single;
+      if(groupSearch){groupSearch.disabled=!receiving||single;groupSearch.required=receiving&&!single;}
+      if(groupToggle)groupToggle.disabled=!receiving||single;
+      if(!receiving||single){groupPopup?.setAttribute("hidden","");groupSearch?.setAttribute("aria-expanded","false");groupToggle?.setAttribute("aria-expanded","false");}
       sizesBox?.querySelectorAll("input").forEach(input=>input.disabled=!receiving||single);
       if(oldSku){oldSku.disabled=!receiving||!single;oldSku.required=receiving&&single;}
       if(oldSearch)oldSearch.disabled=!receiving||!single;
       if(oldQty){oldQty.disabled=!receiving||!single;oldQty.required=receiving&&single;}
     }
-    if(group){group.addEventListener("change",showSizes);showSizes();}
+    if(group){group.addEventListener("change",showSizes);showSizes();connectGroupPicker();}
     if(sizesBox)sizesBox.addEventListener("input",event=>{
       if(event.target?.name==="receipt_qty")event.target.setCustomValidity("");
     });

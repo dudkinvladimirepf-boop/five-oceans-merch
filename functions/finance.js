@@ -217,6 +217,10 @@ function layout(content,title="Финансы") {
   .danger-button:hover{background:#972d2d}
   .pill{padding:4px 7px;border-radius:12px;background:#e9edf4;font-size:11px}
   .combobox{position:relative}
+  .product-combobox-controls{display:flex;width:100%;align-items:stretch}
+  .product-combobox-controls input{min-width:0;flex:1;border-radius:8px 0 0 8px}
+  .product-combobox-toggle{margin:0;flex:none;min-width:45px;border-radius:0 8px 8px 0;font-size:21px;padding:6px 12px}
+  .product-combobox>.suggestions{position:absolute;left:0;right:0;top:44px;z-index:15;box-shadow:0 12px 24px rgba(16,44,67,.16);max-height:280px}
   .suggestions{position:relative;background:#fff;border:1px solid #d3dfea;border-radius:8px;max-height:210px;overflow-y:auto;margin-top:4px}
   .suggestions[hidden]{display:none}
   .suggestions button{display:block;width:100%;text-align:left;margin:0;border:0;border-radius:0;background:white;color:#122b44;font-weight:normal;font-size:13px;padding:10px}
@@ -526,19 +530,6 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<button type="submit" class="btn-secondary">Исправить закупочные цены начальных партий</button></form></div>';
   }
   html+=showTestCleanup(data.testCleanup||{finance_products:[],inventory:[],orders:[],finance_receipts:[]},token);
-  html+='<details class="box finance-fold"><summary>Начальный перенос — показать / скрыть</summary><h2>Начальный перенос существующих товаров</h2>'+
-    (data.opening ?
-     '<p class="ok">Начальная партия перенесена '+esc(data.opening.snapshot_at)+
-     ' · товарных позиций на момент переноса: '+Number(data.opening.stock_lines)+
-     '. Повторный перенос заблокирован.</p>' :
-     '<p class="warn">Однократный перенос девяти существующих товаров из Pages и их фактических складских остатков. '+
-     'Поставщик: «Неизвестный поставщик»; партия: «Начальная партия № 1». '+
-     'Закупочные цены уже известны: худи 2 950 ₽, свитшоты 2 175 ₽, футболки 1 400 ₽, шапка 700 ₽. '+
-     '<strong>Складские количества не изменяются; старые заказы не пересчитываются.</strong> '+
-     'Никаких вымышленных долгов и платежей не создаётся.</p>'+
-     formStart("opening-import",token)+
-     '<button type="submit" class="btn-secondary">Перенести существующие товары и остатки (один раз)</button></form>')+
-     '</details>';
   html+='<h2>Добавить операцию</h2>'+
     '<details class="box finance-fold" open><summary>Приёмка, оплата и расходы — свернуть / развернуть</summary><h3>Единое оформление поступления</h3>'+
       '<p class="muted">Одно подтверждение записывает поступление, поставщика, новую партию, фактическую оплату и расходы. Неоплаченные суммы и расходы можно оставить пустыми. Склад увеличивается только после успешного сохранения всей операции.</p>'+
@@ -549,10 +540,16 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<option value="receipt">Новое поступление (товар + оплата + расходы)</option>'+
       '<option value="settlement">Доплата / отдельный расход без нового поступления</option></select>'+
       '<div id="receipt-main-fields">'+
-      '<label for="receipt-group-select">Товар и цвет (выбираются один раз на всю партию)</label>'+
-      '<select id="receipt-group-select" name="receipt_group" required>'+
+      '<label for="receipt-group-search">Товар и цвет (выбираются один раз на всю партию)</label>'+
+      '<div class="combobox product-combobox">'+
+      '<div class="product-combobox-controls">'+
+      '<input id="receipt-group-search" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="receipt-group-suggestions" autocomplete="off" placeholder="Выберите из списка или начните вводить название" required>'+
+      '<button type="button" id="receipt-group-toggle" class="product-combobox-toggle" aria-label="Показать все товары и цвета" aria-controls="receipt-group-suggestions" aria-expanded="false">▾</button></div>'+
+      '<div id="receipt-group-suggestions" class="suggestions" role="listbox" hidden></div>'+
+      '<select id="receipt-group-select" name="receipt_group" hidden>'+
       '<option value="">— Выберите товар и цвет —</option>'+
       groupOptions.map(g=>'<option value="'+esc(g.value)+'" data-sizes="'+esc(JSON.stringify(g.sizes))+'">'+esc(g.label)+'</option>').join("")+'</select>'+
+      '<p class="field-help">Можно раскрыть весь список стрелкой или найти товар по части названия, включая латиницу.</p></div>'+
       '<div id="receipt-size-table" class="receipt-size-table"><p class="muted">Выберите цвет, чтобы указать количество сразу по всем размерам. Для отсутствующего размера оставьте 0.</p></div>'+
       '<details id="receipt-one-size" class="receipt-legacy"><summary>Режим одного размера (для старой формы)</summary>'+
       '<label for="receipt-sku-select">Товар, цвет и размер</label>'+
