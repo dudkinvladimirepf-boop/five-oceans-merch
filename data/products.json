@@ -25,10 +25,10 @@
           "46-48",
           "50-52"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false,
-        "finance_enabled": true
+        "new_arrival": false
       },
       {
         "code": "white",
@@ -46,10 +46,10 @@
           "48-50",
           "50-52"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false,
-        "finance_enabled": true
+        "new_arrival": false
       }
     ]
   },
@@ -81,10 +81,10 @@
           "50-52",
           "54-56"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false,
-        "finance_enabled": true
+        "new_arrival": false
       }
     ]
   },
@@ -117,10 +117,10 @@
           "52-54",
           "54-56"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false,
-        "finance_enabled": true
+        "new_arrival": false
       }
     ]
   },
@@ -151,10 +151,10 @@
           "54-56",
           "56-58"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": true,
-        "finance_enabled": true
+        "new_arrival": true
       }
     ]
   },
@@ -186,10 +186,10 @@
           "50-52",
           "56-58"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false,
-        "finance_enabled": true
+        "new_arrival": false
       },
       {
         "code": "navy",
@@ -206,10 +206,10 @@
         "sizes": [
           "44-46"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true,
-        "finance_enabled": true
+        "new_arrival": true
       }
     ]
   },
@@ -239,10 +239,10 @@
           "46-48",
           "48-50"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true,
-        "finance_enabled": true
+        "new_arrival": true
       }
     ]
   },
@@ -271,10 +271,10 @@
         "sizes": [
           "48-50"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": true,
-        "finance_enabled": true
+        "new_arrival": true
       }
     ]
   },
@@ -306,10 +306,31 @@
           "54-56",
           "56-58"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false,
-        "finance_enabled": true
+        "new_arrival": false
+      },
+      {
+        "code": "navy",
+        "label": "Тёмно-синий",
+        "hex": "#232B48",
+        "photos": [
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-140952-1-1.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-140959-2-3.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141002-3-2.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141005-4-1.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141008-5-1.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-141010-6-1.png"
+        ],
+        "sizes": [
+          "48-50",
+          "56-58"
+        ],
+        "finance_enabled": true,
+        "available": true,
+        "featured": false,
+        "new_arrival": false
       }
     ]
   },
@@ -337,10 +358,10 @@
         "sizes": [
           "Без размера"
         ],
+        "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true,
-        "finance_enabled": true
+        "new_arrival": true
       }
     ]
   }
