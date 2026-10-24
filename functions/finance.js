@@ -216,6 +216,14 @@ function layout(content,title="Финансы") {
   .suggestions button{display:block;width:100%;text-align:left;margin:0;border:0;border-radius:0;background:white;color:#122b44;font-weight:normal;font-size:13px;padding:10px}
   .suggestions button:hover,.suggestions button:focus{background:#e9f2ff;color:#122b44;outline:2px solid #adcbea}
   .field-help{font-size:12px;color:#506982;margin:5px 0}
+  .finance-fold>summary{cursor:pointer;font-size:17px;font-weight:700;padding:5px 0;list-style:disclosure-closed}
+  .finance-fold[open]>summary{list-style:disclosure-open;border-bottom:1px solid #e0e7ed;padding-bottom:15px;margin-bottom:12px}
+  .finance-fold>summary:focus-visible,.receipt-legacy>summary:focus-visible{outline:2px solid #146789;outline-offset:3px}
+  .receipt-size-table{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:13px 0 18px}
+  .receipt-size-row{margin:0;border:1px solid #d7e0eb;border-radius:9px;padding:10px 12px;background:#f6f8fc;display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .receipt-size-row input[type=number]{width:75px;flex:none;text-align:center}
+  .receipt-legacy{border:1px solid #d7e0eb;border-radius:9px;padding:10px 12px;margin:12px 0}
+  .receipt-legacy summary{cursor:pointer;color:#526778;font-size:13px}
   @media(max-width:650px){
     main{margin:20px auto;padding:12px}
     .crm-card{padding:18px}
@@ -472,7 +480,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
   if(summary.unknownQty)html+='<p class="warn">Внимание: '+summary.unknownQty+
     ' проданных единиц не имеют зарегистрированной закупочной партии. Прибыль завышена на неизвестную себестоимость. '+
     'Добавьте историю приёмки для этих товаров.</p>';
-  html+='<div class="box"><h2>Товары в финансовом учёте</h2>'+
+  html+='<details class="box finance-fold"><summary>Товары в финансовом учёте — показать / скрыть</summary><h2>Товары в финансовом учёте</h2>'+
     '<p class="muted">В Pages CMS откройте нужный цвет и включите «Передать в финансовый учёт — этот цвет». '+ 
     'Если модель уже есть в финансах, цвет сразу появится в форме поступления после сохранения Pages. '+ 
     'Для совершенно новой модели нажмите синхронизацию ниже. Это не добавляет складской остаток и не публикует товар.</p>'+
@@ -484,7 +492,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<br><small>Цвета для приёмки: '+esc((products.find(x=>String(x.product_id)===String(p.product_id))?.variants||[]).filter(financeApprovedVariant).map(v=>v.label).join(', ')||'не выбраны')+'</small>'+
       '</td><td>'+money(p.list_price)+'</td><td>'+(p.purchaseUnitCost===null?'—':money(p.purchaseUnitCost))+'</td><td>'+p.openingQty+'</td><td>'+p.purchased+'</td><td>'+p.consignment+'</td>'+
       '<td>'+p.sold+'</td><td>'+money(p.revenue)+'</td><td>'+money(p.cost)+'</td><td>'+money(p.due)+'</td>'+
-      '<td>'+p.missing+'</td></tr>').join("")+'</table></div></div>';
+      '<td>'+p.missing+'</td></tr>').join("")+'</table></div></details>';
   const catalogOptions=receiptCatalogChoices(products,data.products);
   const groupOptions=receiptGroupChoices(products,data.products);
   const supplierOptions=options(data.suppliers,x=>x.name,x=>x.name);
@@ -507,7 +515,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<button type="submit" class="btn-secondary">Исправить закупочные цены начальных партий</button></form></div>';
   }
   html+=showTestCleanup(data.testCleanup||{finance_products:[],inventory:[],orders:[],finance_receipts:[]},token);
-  html+='<div class="box"><h2>Начальный перенос существующих товаров</h2>'+
+  html+='<details class="box finance-fold"><summary>Начальный перенос — показать / скрыть</summary><h2>Начальный перенос существующих товаров</h2>'+
     (data.opening ?
      '<p class="ok">Начальная партия перенесена '+esc(data.opening.snapshot_at)+
      ' · товарных позиций на момент переноса: '+Number(data.opening.stock_lines)+
@@ -519,9 +527,9 @@ function show(data,summary,products,token,notice,error,filters={}) {
      'Никаких вымышленных долгов и платежей не создаётся.</p>'+
      formStart("opening-import",token)+
      '<button type="submit" class="btn-secondary">Перенести существующие товары и остатки (один раз)</button></form>')+
-     '</div>';
+     '</details>';
   html+='<h2>Добавить операцию</h2>'+
-    '<div class="box"><h3>Единое оформление поступления</h3>'+
+    '<details class="box finance-fold" open><summary>Приёмка, оплата и расходы — свернуть / развернуть</summary><h3>Единое оформление поступления</h3>'+
       '<p class="muted">Одно подтверждение записывает поступление, поставщика, новую партию, фактическую оплату и расходы. Неоплаченные суммы и расходы можно оставить пустыми. Склад увеличивается только после успешного сохранения всей операции.</p>'+
       '<h4>1. Что получили и от кого</h4>'+
       formStart("receipt",token)+
@@ -577,8 +585,8 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<button type="button" id="add-receipt-expense" class="btn-secondary">+ Ещё расход</button>'+
       '<p class="field-help">Проверь все суммы и количество до подтверждения. Это единая операция, отдельно сохранять каждый блок не нужно.</p>'+
       '<button type="submit" id="confirm-receipt" '+(!groupOptions.length?'disabled':'')+'>Подтвердить операцию</button>'+
-      '</form></div>';
-  html+='<div class="box"><h2>Поступления и расчёты</h2>'+
+      '</form></details>';
+  html+='<details class="box finance-fold"><summary>Поступления и расчёты — показать / скрыть</summary><h2>Поступления и расчёты</h2>'+
     '<form method="GET" action="/finance"><div class="forms">'+
     '<label>Поставщик<select name="supplier"><option value="">Все поставщики</option>'+
     data.suppliers.map(x=>'<option value="'+x.id+'"'+(supplierFilter===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join("")+'</select></label>'+
@@ -593,14 +601,14 @@ function show(data,summary,products,token,notice,error,filters={}) {
     '<td>'+esc(r.supplier)+'</td><td>'+(Number(r.is_opening||0)===1?"Начальный остаток":(r.ownership==="purchase"?"Выкуп":"Реализация"))+
     '</td><td>'+r.quantity+'</td><td>'+r.qty_sold+'</td><td>'+money(r.unit_cost)+
     '</td><td>'+money(r.liability)+'</td><td>'+money(r.paid)+'</td><td>'+money(r.debt)+'</td></tr>').join("")+
-    '</table></div></div>';
-  html+='<div class="box"><h2>Примечания к расчёту</h2>'+
+    '</table></div></details>';
+  html+='<details class="box finance-fold"><summary>Примечания к расчёту — показать / скрыть</summary><h2>Примечания к расчёту</h2>'+
     '<p class="muted">Себестоимость списывается по FIFO (сначала более ранние поступления). '+ 
     'Для начальных партий задолженность и выплаты неизвестны, поэтому не начисляются. Для выкупленных новых партий задолженность возникает после приёмки всей партии. '+
     'Для товара под реализацию — только за реализованные единицы. Обычные продажи берутся автоматически '+ 
     'из существующей CRM по статусу «Оплачен»; никакой второй записи заказов не создаётся. '+
     'Сумма «потрачено» основана на записанных платежах и прочих расходах. '+
-    'Финансовые операции с ошибкой корректируем отдельными сторнирующими операциями — не удалением истории.</p></div>';
+    'Финансовые операции с ошибкой корректируем отдельными сторнирующими операциями — не удалением истории.</p></details>';
   return layout(html);
 }
 
