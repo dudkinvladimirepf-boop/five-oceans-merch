@@ -216,6 +216,14 @@ function layout(content,title="Финансы") {
   .suggestions button{display:block;width:100%;text-align:left;margin:0;border:0;border-radius:0;background:white;color:#122b44;font-weight:normal;font-size:13px;padding:10px}
   .suggestions button:hover,.suggestions button:focus{background:#e9f2ff;color:#122b44;outline:2px solid #adcbea}
   .field-help{font-size:12px;color:#506982;margin:5px 0}
+  .finance-fold>summary{cursor:pointer;font-size:17px;font-weight:700;padding:5px 0;list-style:disclosure-closed}
+  .finance-fold[open]>summary{list-style:disclosure-open;border-bottom:1px solid #e0e7ed;padding-bottom:15px;margin-bottom:12px}
+  .finance-fold>summary:focus-visible,.receipt-legacy>summary:focus-visible{outline:2px solid #146789;outline-offset:3px}
+  .receipt-size-table{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:13px 0 18px}
+  .receipt-size-row{margin:0;border:1px solid #d7e0eb;border-radius:9px;padding:10px 12px;background:#f6f8fc;display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .receipt-size-row input[type=number]{width:75px;flex:none;text-align:center}
+  .receipt-legacy{border:1px solid #d7e0eb;border-radius:9px;padding:10px 12px;margin:12px 0}
+  .receipt-legacy summary{cursor:pointer;color:#526778;font-size:13px}
   @media(max-width:650px){
     main{margin:20px auto;padding:12px}
     .crm-card{padding:18px}
@@ -278,6 +286,66 @@ function receiptCatalogChoices(products,financialProducts){
     }
   }
   return choices;
+}
+function receiptGroupChoices(products,financialProducts){
+  const registered=new Map(financialProducts.map(p=>[String(p.product_id),String(p.product_slug)]));
+  const results=[];
+  for(const p of products){
+    if(registered.get(String(p.product_id))!==String(p.slug))continue;
+    for(const v of p.variants||[]){
+      if(!financeApprovedVariant(v)||!Array.isArray(v.sizes)||!v.sizes.length)continue;
+      results.push({
+        value:JSON.stringify([p.product_id,v.code]),
+        label:p.title+" — "+v.label,
+        sizes:[...new Set(v.sizes.map(x=>String(x).trim()).filter(Boolean))]
+      });
+    }
+  }
+  return results;
+}
+function allocatePayment(total,quantities){
+  // Integer arithmetic avoids rounding error for large orders (up to 25 sizes).
+  const grand=quantities.reduce((s,q)=>s+BigInt(q),0n);
+  let taken=0n,paid=0n;
+  return quantities.map((qty,index)=>{
+    taken+=BigInt(qty);
+    const cumulative=index===quantities.length-1?BigInt(total):BigInt(total)*taken/grand;
+    const value=Number(cumulative-paid);paid=cumulative;return value;
+  });
+}
+function receiptSizeLines(form,product){
+  const groupRaw=text(form.get("receipt_group")).trim();
+  if(groupRaw){
+    let pair;try{pair=JSON.parse(groupRaw)}catch{throw Error("Неверный товар или цвет.");}
+    if(!Array.isArray(pair)||pair.length!==2||pair[0]!==product.product_id)
+      throw Error("Неверная комбинация товара и цвета.");
+    const variant=(product.variants||[]).find(v=>v.code===pair[1]&&financeApprovedVariant(v));
+    if(!variant)throw Error("Выбранный цвет не передан в финансовый учёт в Pages.");
+    const sizes=form.getAll("receipt_size").map(x=>text(x).trim());
+    const quantities=form.getAll("receipt_qty");
+    if(!sizes.length||sizes.length!==quantities.length||sizes.length>25)
+      throw Error("Размеры и количества не совпадают (не больше 25 размеров).");
+    const valid=new Set((variant.sizes||[]).map(x=>text(x)));
+    const used=new Set(),items=[];
+    for(let i=0;i<sizes.length;i++){
+      if(!valid.has(sizes[i])||used.has(sizes[i]))throw Error("Размер не относится к выбранному цвету или повторяется.");
+      used.add(sizes[i]);
+      const qty=int(quantities[i],0,1000000,"количество размера "+sizes[i]);
+      if(qty>0)items.push({size:"v:"+variant.code+"|"+sizes[i],qty});
+    }
+    if(!items.length)throw Error("Укажи количество хотя бы для одного размера.");
+    return items;
+  }
+  // Older open forms continue to submit one SKU safely.
+  let sku;try{sku=JSON.parse(text(form.get("sku")))}catch{throw Error("Неверный товар / размер.");}
+  if(!Array.isArray(sku)||sku.length!==2||sku[0]!==product.product_id)
+    throw Error("Неверная комбинация товара и размера.");
+  const size=text(sku[1]);
+  const variant=(product.variants||[]).find(v=>(v.sizes||[]).some(sz=>"v:"+v.code+"|"+sz===size));
+  if(!variant)throw Error("Размер или цвет больше не существует в Pages.");
+  if(!financeApprovedVariant(variant))
+    throw Error("Этот цвет не отмечен «Передать в финансовый учёт» в Pages CMS. Включите переключатель в нужном цвете и сохраните карточку.");
+  return [{size,qty:int(form.get("quantity"),1,1000000,"количество")}];
 }
 function options(rows,valFn,labelFn){
   return rows.map(x=>'<option value="'+esc(valFn(x))+'">'+esc(labelFn(x))+'</option>').join("");
@@ -413,7 +481,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
   if(summary.unknownQty)html+='<p class="warn">Внимание: '+summary.unknownQty+
     ' проданных единиц не имеют зарегистрированной закупочной партии. Прибыль завышена на неизвестную себестоимость. '+
     'Добавьте историю приёмки для этих товаров.</p>';
-  html+='<div class="box"><h2>Товары в финансовом учёте</h2>'+
+  html+='<details class="box finance-fold"><summary>Товары в финансовом учёте — показать / скрыть</summary><h2>Товары в финансовом учёте</h2>'+
     '<p class="muted">В Pages CMS откройте нужный цвет и включите «Передать в финансовый учёт — этот цвет». '+ 
     'Если модель уже есть в финансах, цвет сразу появится в форме поступления после сохранения Pages. '+ 
     'Для совершенно новой модели нажмите синхронизацию ниже. Это не добавляет складской остаток и не публикует товар.</p>'+
@@ -425,8 +493,9 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<br><small>Цвета для приёмки: '+esc((products.find(x=>String(x.product_id)===String(p.product_id))?.variants||[]).filter(financeApprovedVariant).map(v=>v.label).join(', ')||'не выбраны')+'</small>'+
       '</td><td>'+money(p.list_price)+'</td><td>'+(p.purchaseUnitCost===null?'—':money(p.purchaseUnitCost))+'</td><td>'+p.openingQty+'</td><td>'+p.purchased+'</td><td>'+p.consignment+'</td>'+
       '<td>'+p.sold+'</td><td>'+money(p.revenue)+'</td><td>'+money(p.cost)+'</td><td>'+money(p.due)+'</td>'+
-      '<td>'+p.missing+'</td></tr>').join("")+'</table></div></div>';
+      '<td>'+p.missing+'</td></tr>').join("")+'</table></div></details>';
   const catalogOptions=receiptCatalogChoices(products,data.products);
+  const groupOptions=receiptGroupChoices(products,data.products);
   const supplierOptions=options(data.suppliers,x=>x.name,x=>x.name);
   const receiptOpts=options(summary.rows.filter(r=>Number(r.is_opening||0)!==1),r=>r.id,r=>"#"+r.id+" "+(r.batch_name||"Без названия")+" · "+r.product_slug+" / "+r.stock_size+" · "+r.supplier);
   const supplierFilter=String(filters.supplier||"");
@@ -447,7 +516,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<button type="submit" class="btn-secondary">Исправить закупочные цены начальных партий</button></form></div>';
   }
   html+=showTestCleanup(data.testCleanup||{finance_products:[],inventory:[],orders:[],finance_receipts:[]},token);
-  html+='<div class="box"><h2>Начальный перенос существующих товаров</h2>'+
+  html+='<details class="box finance-fold"><summary>Начальный перенос — показать / скрыть</summary><h2>Начальный перенос существующих товаров</h2>'+
     (data.opening ?
      '<p class="ok">Начальная партия перенесена '+esc(data.opening.snapshot_at)+
      ' · товарных позиций на момент переноса: '+Number(data.opening.stock_lines)+
@@ -459,9 +528,9 @@ function show(data,summary,products,token,notice,error,filters={}) {
      'Никаких вымышленных долгов и платежей не создаётся.</p>'+
      formStart("opening-import",token)+
      '<button type="submit" class="btn-secondary">Перенести существующие товары и остатки (один раз)</button></form>')+
-     '</div>';
+     '</details>';
   html+='<h2>Добавить операцию</h2>'+
-    '<div class="box"><h3>Единое оформление поступления</h3>'+
+    '<details class="box finance-fold" open><summary>Приёмка, оплата и расходы — свернуть / развернуть</summary><h3>Единое оформление поступления</h3>'+
       '<p class="muted">Одно подтверждение записывает поступление, поставщика, новую партию, фактическую оплату и расходы. Неоплаченные суммы и расходы можно оставить пустыми. Склад увеличивается только после успешного сохранения всей операции.</p>'+
       '<h4>1. Что получили и от кого</h4>'+
       formStart("receipt",token)+
@@ -470,14 +539,21 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<option value="receipt">Новое поступление (товар + оплата + расходы)</option>'+
       '<option value="settlement">Доплата / отдельный расход без нового поступления</option></select>'+
       '<div id="receipt-main-fields">'+
-      '<label for="receipt-sku-select">Товар, цвет и размер — выбрать из списка</label>'+
-      '<select id="receipt-sku-select" name="sku" required>'+
-      '<option value="">— Выберите товар, цвет и размер —</option>'+
+      '<label for="receipt-group-select">Товар и цвет (выбираются один раз на всю партию)</label>'+
+      '<select id="receipt-group-select" name="receipt_group" required>'+
+      '<option value="">— Выберите товар и цвет —</option>'+
+      groupOptions.map(g=>'<option value="'+esc(g.value)+'" data-sizes="'+esc(JSON.stringify(g.sizes))+'">'+esc(g.label)+'</option>').join("")+'</select>'+
+      '<div id="receipt-size-table" class="receipt-size-table"><p class="muted">Выберите цвет, чтобы указать количество сразу по всем размерам. Для отсутствующего размера оставьте 0.</p></div>'+
+      '<details id="receipt-one-size" class="receipt-legacy"><summary>Режим одного размера (для старой формы)</summary>'+
+      '<label for="receipt-sku-select">Товар, цвет и размер</label>'+
+      '<select id="receipt-sku-select" name="sku" disabled><option value="">— Выберите размер —</option>'+
       options(catalogOptions,x=>x.value,x=>x.label)+'</select>'+
-      '<div class="combobox"><label for="receipt-sku-search">Или найти товар по названию / ввести вручную</label>'+
-      '<input id="receipt-sku-search" type="search" autocomplete="off" placeholder="Например: футболка, Не как все, ne..." aria-controls="receipt-sku-suggestions">'+
+      '<div class="combobox"><label for="receipt-sku-search">Поиск по названию</label>'+
+      '<input id="receipt-sku-search" type="search" autocomplete="off" placeholder="Например: ne kak..." aria-controls="receipt-sku-suggestions" disabled>'+
       '<div id="receipt-sku-suggestions" class="suggestions" role="listbox" hidden></div></div>'+
-      '<p class="field-help">Начните печатать — появятся подходящие товары и размеры. Выберите подсказку. Для совершенно нового товара сначала создайте карточку в Pages и синхронизируйте с финансами.</p>'+
+      '<label>Количество для одного размера<input id="receipt-legacy-qty" name="quantity" type="number" min="1" max="1000000" disabled></label>'+
+      '</details>'+
+      '<p class="field-help">Одна партия — несколько размеров, одна закупочная цена и одна кнопка подтверждения.</p>'+
       '<label for="receipt-supplier-select">Поставщик — выбрать из списка</label>'+
       '<select id="receipt-supplier-select"><option value="">— Новый или не выбран —</option>'+
       supplierOptions+'</select>'+
@@ -488,8 +564,7 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '<label>Название партии у поставщика<input name="batch_name" value="Партия № 1" maxlength="150" required></label>'+
       '<label>Тип договора<select name="ownership"><option value="purchase">Выкупили</option>'+
       '<option value="consignment">Под реализацию</option></select></label>'+
-      '<label>Количество<input name="quantity" type="number" min="1" max="1000000" required></label>'+
-      '<label>Закупочная цена / выплата за штуку (₽)<input name="unit_cost" type="number" min="0" max="100000000" required></label>'+
+      '<label>Закупочная цена / выплата за штуку (₽) — для всех размеров<input name="unit_cost" type="number" min="0" max="100000000" required></label>'+
       '<label>Примечание к поступлению<input name="note" maxlength="250"></label>'+
       '</div>'+
       '<div id="existing-receipt-select" hidden>'+
@@ -510,9 +585,9 @@ function show(data,summary,products,token,notice,error,filters={}) {
       '</div>'+
       '<button type="button" id="add-receipt-expense" class="btn-secondary">+ Ещё расход</button>'+
       '<p class="field-help">Проверь все суммы и количество до подтверждения. Это единая операция, отдельно сохранять каждый блок не нужно.</p>'+
-      '<button type="submit" id="confirm-receipt" '+(!catalogOptions.length?'disabled':'')+'>Подтвердить операцию</button>'+
-      '</form></div>';
-  html+='<div class="box"><h2>Поступления и расчёты</h2>'+
+      '<button type="submit" id="confirm-receipt" '+(!groupOptions.length?'disabled':'')+'>Подтвердить операцию</button>'+
+      '</form></details>';
+  html+='<details class="box finance-fold"><summary>Поступления и расчёты — показать / скрыть</summary><h2>Поступления и расчёты</h2>'+
     '<form method="GET" action="/finance"><div class="forms">'+
     '<label>Поставщик<select name="supplier"><option value="">Все поставщики</option>'+
     data.suppliers.map(x=>'<option value="'+x.id+'"'+(supplierFilter===String(x.id)?' selected':'')+'>'+esc(x.name)+'</option>').join("")+'</select></label>'+
@@ -527,14 +602,14 @@ function show(data,summary,products,token,notice,error,filters={}) {
     '<td>'+esc(r.supplier)+'</td><td>'+(Number(r.is_opening||0)===1?"Начальный остаток":(r.ownership==="purchase"?"Выкуп":"Реализация"))+
     '</td><td>'+r.quantity+'</td><td>'+r.qty_sold+'</td><td>'+money(r.unit_cost)+
     '</td><td>'+money(r.liability)+'</td><td>'+money(r.paid)+'</td><td>'+money(r.debt)+'</td></tr>').join("")+
-    '</table></div></div>';
-  html+='<div class="box"><h2>Примечания к расчёту</h2>'+
+    '</table></div></details>';
+  html+='<details class="box finance-fold"><summary>Примечания к расчёту — показать / скрыть</summary><h2>Примечания к расчёту</h2>'+
     '<p class="muted">Себестоимость списывается по FIFO (сначала более ранние поступления). '+ 
     'Для начальных партий задолженность и выплаты неизвестны, поэтому не начисляются. Для выкупленных новых партий задолженность возникает после приёмки всей партии. '+
     'Для товара под реализацию — только за реализованные единицы. Обычные продажи берутся автоматически '+ 
     'из существующей CRM по статусу «Оплачен»; никакой второй записи заказов не создаётся. '+
     'Сумма «потрачено» основана на записанных платежах и прочих расходах. '+
-    'Финансовые операции с ошибкой корректируем отдельными сторнирующими операциями — не удалением истории.</p></div>';
+    'Финансовые операции с ошибкой корректируем отдельными сторнирующими операциями — не удалением истории.</p></details>';
   return layout(html);
 }
 
@@ -731,27 +806,26 @@ async function perform(context,form) {
     const mode=text(form.get("operation_mode")||"receipt");
     if(mode==="settlement")return settleExisting(db,form);
     if(mode!=="receipt")throw Error("Неизвестный режим операции.");
-    const raw=text(form.get("sku"));let sku;
-    try{sku=JSON.parse(raw)}catch{throw Error("Неверный товар / размер.");}
-    if(!Array.isArray(sku)||sku.length!==2)throw Error("Неверная комбинация товара и размера.");
-    const productId=text(sku[0]),size=text(sku[1]);
+    const groupRaw=text(form.get("receipt_group")).trim();
+    let selected;
+    try{selected=JSON.parse(groupRaw||text(form.get("sku")))}catch{throw Error("Неверный товар или цвет.");}
+    if(!Array.isArray(selected)||selected.length!==2)throw Error("Неверный товар или цвет.");
+    const productId=text(selected[0]);
     const available=await catalog(context);
     const product=available.find(p=>p.product_id===productId);
     if(!product)throw Error("Товар не найден в Pages. Сначала создайте карточку в Pages.");
-    const variant=(product.variants||[]).find(v=>(v.sizes||[]).some(s=>"v:"+v.code+"|"+s===size));
-    if(!variant)throw Error("Размер или цвет больше не существует в Pages.");
-    if(!financeApprovedVariant(variant))
-      throw Error("Этот цвет не отмечен «Передать в финансовый учёт» в Pages CMS. Включите переключатель в нужном цвете и сохраните карточку.");
+    const lines=receiptSizeLines(form,product);
     const imported=await db.prepare("SELECT 1 AS ok FROM finance_products WHERE product_id=? AND product_slug=?").bind(productId,product.slug).first();
     if(!imported)throw Error("Сначала синхронизируйте карточку товара в разделе «Финансы».");
-    const excluded=await db.prepare("SELECT 1 AS ok FROM inventory_exclusions WHERE product_slug=? AND size=?").bind(product.slug,size).first();
-    if(excluded)throw Error("Позиция находится в корзине склада. Сначала восстановите её в CRM.");
+    for(const line of lines){
+      const excluded=await db.prepare("SELECT 1 AS ok FROM inventory_exclusions WHERE product_slug=? AND size=?").bind(product.slug,line.size).first();
+      if(excluded)throw Error("Размер "+line.size+" находится в корзине склада. Сначала восстановите его в CRM.");
+    }
     const providerInput=text(form.get("supplier_name")).replace(/\s+/g," ").trim();
     const supplierName=await resolveSupplierName(db,providerInput,form.get("supplier"));
     if(!supplierName)throw Error("Укажите поставщика: выберите из списка или введите новое название.");
     const ownership=text(form.get("ownership"));
     if(!["purchase","consignment"].includes(ownership))throw Error("Выберите тип договора.");
-    const qty=int(form.get("quantity"),1,1000000,"количество");
     const cost=int(form.get("unit_cost"),0,100000000,"себестоимость");
     const note=text(form.get("note")).trim().slice(0,250);
     const batchName=text(form.get("batch_name")).trim();
@@ -762,30 +836,29 @@ async function perform(context,form) {
       db.prepare("INSERT OR IGNORE INTO finance_suppliers(name) VALUES(?)").bind(supplierName),
       db.prepare("INSERT OR IGNORE INTO finance_batches(supplier_id,name) "+
         "SELECT s.id,? FROM finance_suppliers s WHERE s.name=?")
-        .bind(batchName,supplierName),
-      db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note) "+
+        .bind(batchName,supplierName)
+    ];
+    const shares=extras.payment>0 ? allocatePayment(extras.payment,lines.map(l=>l.qty)) : [];
+    lines.forEach((line,i)=>{
+      statements.push(db.prepare("INSERT INTO finance_receipts (product_id,product_slug,stock_size,supplier_id,batch_id,ownership,quantity,unit_cost,note) "+
         "SELECT ?,?,?,s.id,b.id,?,?,?,? FROM finance_suppliers s "+
         "JOIN finance_batches b ON b.supplier_id=s.id AND b.name=? WHERE s.name=?")
-        .bind(productId,product.slug,size,ownership,qty,cost,note,batchName,supplierName)
-    ];
-    if(extras.payment>0){
-      // Immediately after inserting the receipt, last_insert_rowid() points
-      // to THIS receipt, not any other receipt in a same-named supplier batch.
-      statements.push(db.prepare(
+        .bind(productId,product.slug,line.size,ownership,line.qty,cost,note,batchName,supplierName));
+      if(shares[i]>0)statements.push(db.prepare(
         "INSERT INTO finance_supplier_payments(receipt_id,amount,note) VALUES(last_insert_rowid(),?,?)"
-      ).bind(extras.payment,extras.paymentNote));
-    }
+      ).bind(shares[i],extras.paymentNote));
+      statements.push(db.prepare(
+        "INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) "+
+        "ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP"
+      ).bind(product.slug,productId,line.size,line.qty));
+    });
     for(const e of extras.expenses){
       statements.push(db.prepare("INSERT INTO finance_expenses(reason,amount) VALUES(?,?)").bind(e.reason,e.amount));
     }
-    statements.push(db.prepare(
-      "INSERT INTO inventory (product_slug,product_id,size,total_quantity,reserved_quantity) VALUES (?,?,?, ?,0) "+
-      "ON CONFLICT(product_slug,size) DO UPDATE SET total_quantity=inventory.total_quantity+excluded.total_quantity,updated_at=CURRENT_TIMESTAMP"
-    ).bind(product.slug,productId,size,qty));
-    // D1 batch is atomic: a failed payment, expense or stock write rolls back
-    // receipt, supplier creation, all other writes as one transaction.
+    // D1 atomic batch: all sizes, payments, expenses and stock either commit together or roll back.
     await db.batch(statements);
-    return "Поступление оформлено: +"+qty+" шт. на складе"+
+    const totalQty=lines.reduce((sum,l)=>sum+l.qty,0);
+    return "Поступление оформлено: +"+totalQty+" шт. на складе ("+lines.length+" размеров)"+
       (extras.payment ? ", поставщику записано "+money(extras.payment) : "")+
       (extras.expenses.length ? ", дополнительных расходов: "+extras.expenses.length : "")+
       ". Товар не публиковался.";

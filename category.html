@@ -125,14 +125,25 @@ main {
     box-shadow 0.2s;
 }
 
-a.card {
-  cursor: pointer;
-}
-
-a.card:hover {
+.card:hover {
   transform: translateY(-4px);
   box-shadow: 0 10px 28px #102c4320;
 }
+.card-photo-link { display:block; }
+.card-title-link { color:inherit; }
+.card-title-link:hover,.card-title-link:focus-visible { text-decoration:underline; }
+.catalog-swatches { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-top:10px; }
+.catalog-swatch { width:25px; height:25px; border-radius:50%; border:2px solid #cbd5df;
+  background:var(--swatch-color,#bbb); padding:0; cursor:pointer; display:inline-block;
+  box-shadow:inset 0 0 0 1px #ffffff88; }
+.catalog-swatch.selected { outline:2px solid #102c43; outline-offset:2px; }
+.catalog-swatch.unavailable { opacity:.48; position:relative; }
+.catalog-swatch.unavailable::after { content:"";position:absolute;inset:10px -3px;
+  height:2px;background:#b53636;transform:rotate(-40deg); }
+.catalog-swatch:focus-visible { outline:3px solid #146789; outline-offset:3px; }
+.catalog-color-name { font-size:12px;color:#617383;margin:8px 0 0; }
+.card .open-product { display:inline-block; }
+
 
 .card img {
   display: block;
@@ -399,133 +410,108 @@ function catalogHighlighted(product, field) {
     product.variants.some(v => v && v.available === true && v[field] === true);
 }
 
+/* Для каждой модели выбираем очередной цвет раз в три дня.
+   Без таймеров или записей на сервер: все посетители видят одинаковую ротацию.
+   Неподтвержденные / выключенные цвета не используем для стартовой обложки. */
+const COVER_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
+function catalogPhotoVariants(product) {
+  return (Array.isArray(product?.variants) ? product.variants : [])
+    .filter(v=>v && /^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code||"") &&
+      Array.isArray(v.photos) && v.photos.some(Boolean));
+}
+function coverVariant(product,now=Date.now()) {
+  const all=catalogPhotoVariants(product);
+  const available=all.filter(v=>v.available===true);
+  const choices=available.length?available:all;
+  if(!choices.length)return null;
+  // Смещение привязано к товару, чтобы весь каталог не переключался на один цвет.
+  const offset=Array.from(String(product.product_id||product.slug||""))
+    .reduce((sum,c)=>sum+c.charCodeAt(0),0);
+  const period=Math.floor(now/COVER_PERIOD_MS);
+  return choices[(period+offset)%choices.length];
+}
+function variantCoverUrl(v) {
+  return Array.isArray(v?.photos)?v.photos.find(p=>typeof p==="string"&&p.trim())||null:null;
+}
+function productUrl(product,variant) {
+  return "/product.html?slug="+encodeURIComponent(product.slug.trim())+
+    (variant?"&color="+encodeURIComponent(variant.code):"");
+}
+
 /* СОЗДАНИЕ КАРТОЧКИ ТОВАРА */
-
 function createProductCard(product) {
-
-  const hasSlug =
-    typeof product.slug === "string" &&
-    product.slug.trim().length > 0;
-
-  const card = createElement(
-    hasSlug ? "a" : "article",
-    "card"
-  );
-
-  if (hasSlug) {
-    const selectedColor = catalogVariant(product);
-    card.href = "/product.html?slug=" +
-      encodeURIComponent(product.slug.trim()) +
-      (selectedColor ? "&color=" + encodeURIComponent(selectedColor.code) : "");
-  }
-
-  /* Фотографии */
-
-  const photos = catalogPhoto(product) ? [catalogPhoto(product)] : [];
-
-  if (photos.length > 0) {
-
-    const img = document.createElement("img");
-
-    img.src = photos[0];
-    img.alt = product.title || "Товар";
-    img.loading = "lazy";
-
-    card.appendChild(img);
-
-  } else {
-
-    card.appendChild(
-      createElement(
-        "div",
-        "placeholder",
-        "5 ОКЕАНОВ"
-      )
-    );
-  }
-
-  /* Информация */
-
-  const info = createElement("div", "info");
-
-  info.appendChild(
-    createElement(
-      "h3",
-      "",
-      product.title || "Товар"
-    )
-  );
-
-  /* Полное описание показывается только на странице товара. */
-
-  /* Цена */
-
-  info.appendChild(
-    createElement(
-      "p",
-      "price",
-      formatPrice(product.price)
-    )
-  );
-
-  /* Статус наличия используем только для логики показа размеров. */
-  const available = catalogAvailable(product);
-
-  /* Размеры */
-
-  const selected = catalogVariant(product);
-  const sizes = Array.isArray(selected?.sizes)
-    ? selected.sizes.filter(Boolean) : [];
-
-  if (available && sizes.length > 0) {
-
-    info.appendChild(
-      createElement(
-        "p",
-        "",
-        "Размеры в наличии:"
-      )
-    );
-
-    const sizeContainer = createElement(
-      "div",
-      "sizes"
-    );
-
-    sizes.forEach(size => {
-      sizeContainer.appendChild(
-        createElement("span", "size", size)
-      );
+  const hasSlug=typeof product.slug==="string"&&product.slug.trim().length>0;
+  const card=createElement("article","card");
+  let current=coverVariant(product);
+  const photoLink=createElement(hasSlug?"a":"div","card-photo-link");
+  if(hasSlug)photoLink.href=productUrl(product,current);
+  const image=document.createElement("img");
+  image.alt=product.title||"Товар";
+  image.loading="lazy";
+  const blank=createElement("div","placeholder","5 ОКЕАНОВ");
+  function selectColor(v) {
+    current=v;
+    const url=variantCoverUrl(v);
+    if(url){
+      image.src=url;
+      image.alt=(product.title||"Товар")+" — "+v.label;
+      photoLink.replaceChildren(image);
+    }else photoLink.replaceChildren(blank);
+    if(hasSlug)photoLink.href=productUrl(product,v);
+    if(titleLink)titleLink.href=productUrl(product,v);
+    if(detailLink)detailLink.href=productUrl(product,v);
+    if(colorName)colorName.textContent=v?.label||"";
+    if(swatches)swatches.querySelectorAll("button").forEach(btn=>{
+      const isSelected=btn.dataset.color===v?.code;
+      btn.classList.toggle("selected",isSelected);
+      btn.setAttribute("aria-pressed",isSelected?"true":"false");
     });
-
-    info.appendChild(sizeContainer);
   }
+  let titleLink=null,detailLink=null,colorName=null,swatches=null;
+  card.appendChild(photoLink);
 
-  /* Ссылка на товар */
+  const info=createElement("div","info");
+  const heading=createElement("h3","");
+  titleLink=createElement(hasSlug?"a":"span","card-title-link",product.title||"Товар");
+  if(hasSlug)titleLink.href=productUrl(product,current);
+  heading.appendChild(titleLink);
+  info.appendChild(heading);
+  info.appendChild(createElement("p","price",formatPrice(product.price)));
 
-  if (hasSlug) {
-
-    info.appendChild(
-      createElement(
-        "div",
-        "open-product",
-        "Подробнее о товаре →"
-      )
-    );
-
-  } else {
-
-    info.appendChild(
-      createElement(
-        "div",
-        "no-link",
-        "Страница товара пока не настроена"
-      )
-    );
+  /* Цвета вместо размеров. По нажатию / наведению меняется фото и ссылка
+     на конкретный цвет; нет перехода из категории до нажатия на фото / ссылку. */
+  const variants=(Array.isArray(product.variants)?product.variants:[])
+    .filter(v=>v && /^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code||""));
+  if(variants.length){
+    info.appendChild(createElement("p","catalog-color-name","Цвета в каталоге:"));
+    swatches=createElement("div","catalog-swatches");
+    swatches.setAttribute("role","group");
+    swatches.setAttribute("aria-label","Цвета товара");
+    variants.forEach(v=>{
+      const btn=createElement("button","catalog-swatch");
+      btn.type="button";
+      btn.dataset.color=v.code;
+      btn.title=v.label+(v.available===true?"":" — временно недоступен");
+      btn.setAttribute("aria-label",btn.title);
+      btn.style.setProperty("--swatch-color",/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v.hex||"")?v.hex:"#bbb");
+      if(v.available!==true)btn.classList.add("unavailable");
+      btn.addEventListener("click",()=>selectColor(v));
+      btn.addEventListener("mouseenter",()=>selectColor(v));
+      btn.addEventListener("focus",()=>selectColor(v));
+      swatches.appendChild(btn);
+    });
+    info.appendChild(swatches);
+    colorName=createElement("p","catalog-color-name","");
+    info.appendChild(colorName);
   }
-
+  if(hasSlug){
+    detailLink=createElement("a","open-product","Подробнее о товаре →");
+    detailLink.href=productUrl(product,current);
+    info.appendChild(detailLink);
+  }else info.appendChild(createElement("div","no-link","Страница товара пока не настроена"));
   card.appendChild(info);
-
+  if(current)selectColor(current);
+  else photoLink.appendChild(blank);
   return card;
 }
 

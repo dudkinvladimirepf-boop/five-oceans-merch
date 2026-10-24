@@ -96,9 +96,9 @@ test("new receipt plus actual payment and two expenses use one D1 atomic batch",
   assert.match(writes[3].sql,/INSERT INTO finance_supplier_payments/);
   assert.match(writes[3].sql,/last_insert_rowid\(\)/);
   assert.deepEqual(writes[3].params,[3000,"Частичная оплата"]);
-  assert.match(writes[4].sql,/finance_expenses/);
+  assert.match(writes[4].sql,/INSERT INTO inventory/);
   assert.match(writes[5].sql,/finance_expenses/);
-  assert.match(writes[6].sql,/INSERT INTO inventory/);
+  assert.match(writes[6].sql,/finance_expenses/);
 });
 
 test("deferred settlement runs in same form without adding inventory",async()=>{
