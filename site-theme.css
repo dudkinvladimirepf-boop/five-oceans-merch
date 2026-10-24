@@ -227,7 +227,7 @@ body .hero-button { display:inline-flex; justify-content:center; align-items:cen
 .home-page #new-arrivals .category-info {
   position:absolute; bottom:0; left:0; right:0; color:#fff; z-index:2;
 }
-.home-page #new-arrivals .category-info h3:first-child { color:#fff; font-size:17px!important; font-weight:700; }
+.home-page #new-arrivals .category-info h3:first-child { color:#fff; font-size:14px!important; font-weight:700; }
 .home-page #new-arrivals .category-info h3:nth-child(2) { color:#fff; }
 .home-page #new-arrivals .open-category { color:#f7a5d8; }
 .home-page .about {
