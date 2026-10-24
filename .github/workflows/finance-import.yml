@@ -27,7 +27,7 @@ jobs:
             throw new Error("Set FINANCE_SYNC_TOKEN as a GitHub Actions repository secret and Cloudflare Pages production secret first.");
           }
           const products = JSON.parse(fs.readFileSync("data/products.json","utf8"));
-          const marked = products.filter(p => p.finance_enabled === true)
+          const marked = products.filter(p => (p.variants || []).some(v => v.finance_enabled === true))
             .map(({ product_id, slug, title, price }) => ({ product_id, slug, title, price }));
           if (!marked.length) {
             console.log("No marked products found in Pages CMS.");
