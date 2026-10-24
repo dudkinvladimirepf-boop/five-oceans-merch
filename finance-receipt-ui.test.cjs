@@ -61,6 +61,11 @@ test("all nine existing finance products remain available with per-color approva
     receipts:[],payments:[],expenses:[],sales:[],batches:[],opening:{snapshot_at:"today",stock_lines:0}};
   const html=show(data,calculate(data),productList,"csrf","","");
   assert.match(html,/id="receipt-sku-select"/);
+  assert.match(html,/id="receipt-group-search"[^>]*role="combobox"/);
+  assert.match(html,/id="receipt-group-toggle"[^>]*aria-label="Показать все товары и цвета"/);
+  assert.match(html,/id="receipt-group-select" name="receipt_group" hidden/);
+  assert.match(html,/id="receipt-group-suggestions" class="suggestions" role="listbox"/);
+  assert.doesNotMatch(html,/Начальный перенос — показать \/ скрыть/);
   assert.match(html,/Футболка «Не как все»/);
   assert.match(html,/id="receipt-supplier-input"/);
   assert.doesNotMatch(html,/<h3>Поставщик<\/h3>/);
