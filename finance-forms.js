@@ -102,6 +102,55 @@
   if(typeof document==="undefined")return;
   const ready=()=>{
     connect("receipt-sku-select","receipt-sku-search","receipt-sku-suggestions",false);
+    const group=document.getElementById("receipt-group-select");
+    const sizesBox=document.getElementById("receipt-size-table");
+    const legacy=document.getElementById("receipt-one-size");
+    const oldSku=document.getElementById("receipt-sku-select");
+    const oldSearch=document.getElementById("receipt-sku-search");
+    const oldQty=document.getElementById("receipt-legacy-qty");
+    function showSizes(){
+      if(!group||!sizesBox)return;
+      const option=group.selectedOptions[0];
+      let sizes=[];
+      try{sizes=JSON.parse(option?.dataset.sizes||"[]");}catch{sizes=[];}
+      sizesBox.replaceChildren();
+      if(!sizes.length){
+        const hint=document.createElement("p");hint.className="muted";
+        hint.textContent="Выберите товар и цвет, чтобы увидеть размеры.";
+        sizesBox.append(hint);
+      }
+      for(const size of sizes){
+        const label=document.createElement("label");
+        label.className="receipt-size-row";
+        const caption=document.createElement("span");
+        caption.textContent="Размер "+size;
+        const sizeInput=document.createElement("input");
+        sizeInput.type="hidden";sizeInput.name="receipt_size";sizeInput.value=size;
+        const qty=document.createElement("input");
+        qty.type="number";qty.name="receipt_qty";qty.min="0";qty.max="1000000";qty.step="1";qty.value="0";
+        qty.setAttribute("aria-label","Количество — размер "+size);
+        label.append(caption,sizeInput,qty);
+        sizesBox.append(label);
+      }
+      synchronizeReceiptMode();
+    }
+    function synchronizeReceiptMode(){
+      const intake=document.getElementById("receipt-main-fields");
+      const receiving=document.getElementById("finance-operation-mode")?.value!=="settlement";
+      const single=Boolean(legacy?.open);
+      if(!intake)return;
+      if(group){group.disabled=!receiving||single;group.required=receiving&&!single;}
+      sizesBox?.querySelectorAll("input").forEach(input=>input.disabled=!receiving||single);
+      if(oldSku){oldSku.disabled=!receiving||!single;oldSku.required=receiving&&single;}
+      if(oldSearch)oldSearch.disabled=!receiving||!single;
+      if(oldQty){oldQty.disabled=!receiving||!single;oldQty.required=receiving&&single;}
+    }
+    if(group){group.addEventListener("change",showSizes);showSizes();}
+    if(sizesBox)sizesBox.addEventListener("input",event=>{
+      if(event.target?.name==="receipt_qty")event.target.setCustomValidity("");
+    });
+    if(legacy)legacy.addEventListener("toggle",synchronizeReceiptMode);
+
     connect("receipt-supplier-select","receipt-supplier-input","receipt-supplier-suggestions",true);
     const expenses=document.getElementById("receipt-expenses");
     const add=document.getElementById("add-receipt-expense");
@@ -135,12 +184,25 @@
         if(submit)submit.disabled=receiving&&!hasSkuChoices;
       };
       mode.addEventListener("change",toggle);
+      mode.addEventListener("change",synchronizeReceiptMode);
       toggle();
+      synchronizeReceiptMode();
     }
     if(form){
       let submitted=false;
       form.addEventListener("submit",event=>{
         if(event.defaultPrevented)return;
+        if(mode?.value==="receipt"&&!legacy?.open){
+          const quantities=Array.from(sizesBox?.querySelectorAll('input[name="receipt_qty"]')||[]);
+          if(!quantities.some(input=>Number(input.value)>0)){
+            event.preventDefault();
+            const current=quantities[0];
+            if(current){current.setCustomValidity("Укажи хотя бы одно положительное количество.");current.reportValidity();current.focus();}
+            else {group?.setCustomValidity("Выбери товар и цвет.");group?.reportValidity();}
+            return;
+          }
+          quantities.forEach(input=>input.setCustomValidity(""));
+        }
         if(submitted){event.preventDefault();return;}
         submitted=true;
         submit.disabled=true;
