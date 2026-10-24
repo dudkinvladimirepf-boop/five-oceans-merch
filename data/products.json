@@ -310,6 +310,27 @@
         "available": true,
         "featured": false,
         "new_arrival": false
+      },
+      {
+        "code": "black",
+        "label": "Чёрный",
+        "hex": "#171717",
+        "photos": [
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-170855-1.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-170913-2.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-170916-3.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-170920-4.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-170923-5.png",
+          "/media/izobrazhenie-chatgpt-24-okt-2026-g-170926-6.png"
+        ],
+        "sizes": [
+          "48-50",
+          "50-52"
+        ],
+        "finance_enabled": true,
+        "available": true,
+        "featured": false,
+        "new_arrival": false
       }
     ]
   },
