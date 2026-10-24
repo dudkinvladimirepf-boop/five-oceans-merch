@@ -383,16 +383,34 @@ footer {
 
 <script>
 
-function catalogVariant(product, highlight = null) {
+// Like collection covers, homepage product selection and colors change every three days.
+// Date-based rotation is stable across visitors, browsers and page refreshes.
+const SHOWCASE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
+const SHOWCASE_LIMIT = 5;
+function showcasePeriod(now = Date.now()) {
+  return Math.floor(now / SHOWCASE_PERIOD_MS);
+}
+function showcaseProducts(items, sectionId, now = Date.now()) {
+  if (!items.length) return [];
+  const start = (showcasePeriod(now) + (sectionId === "featured" ? 2 : 0)) % items.length;
+  return Array.from({length: Math.min(SHOWCASE_LIMIT, items.length)},
+    (_, n) => items[(start + n) % items.length]);
+}
+function catalogVariant(product, highlight = null, now = Date.now()) {
   const variants = Array.isArray(product.variants)
     ? product.variants.filter(v => v && /^[a-z0-9][a-z0-9-]{0,24}$/.test(v.code || ""))
     : [];
   const active = variants.filter(v => v.available === true);
-  const choices = highlight
+  const eligible = highlight
     ? active.filter(v => v[highlight] === true)
     : (active.length ? active : variants);
   const hasPhoto = v => Array.isArray(v.photos) && v.photos.some(Boolean);
-  return choices.find(hasPhoto) || choices[0] || null;
+  const photoChoices = eligible.filter(hasPhoto);
+  const choices = photoChoices.length ? photoChoices : eligible;
+  if (!choices.length) return null;
+  const offset = Array.from(String(product.product_id || product.slug || ""))
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return choices[(showcasePeriod(now) + offset) % choices.length];
 }
 function catalogPhoto(product, highlight = null) {
   const variant = catalogVariant(product, highlight);
@@ -555,7 +573,9 @@ function createProductCard(product, categories, highlight = null) {
 
   const cover = makeElement("div", "category-cover");
 
-  const photo = catalogPhoto(product, highlight);
+  // Cover and destination always reference the same selected color.
+  const photo = selectedColor && Array.isArray(selectedColor.photos)
+    ? selectedColor.photos.find(Boolean) || null : null;
   const photos = photo ? [photo] : [];
 
   if (photos.length) {
@@ -617,7 +637,7 @@ function createShowcase(id, title, description, items, categories) {
 
   const grid = makeElement("div", "categories");
 
-  items.forEach(product => {
+  showcaseProducts(items, id).forEach(product => {
     grid.appendChild(
       createProductCard(product, categories,
         id === "new-arrivals" ? "new_arrival" : "featured")

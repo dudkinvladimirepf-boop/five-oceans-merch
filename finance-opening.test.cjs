@@ -57,8 +57,13 @@ test("nine existing products are priced by immutable IDs; new goods excluded",as
     const p=catalog.find(x=>x.slug===slug);
     assert.equal(LEGACY_UNIT_COSTS.get(p.product_id),cost,slug);
   }
-  for(const p of catalog.filter(p=>p.slug.startsWith("futbolka-")))
+  const legacyShirts=catalog.filter(p=>p.slug.startsWith("futbolka-")&&
+    LEGACY_UNIT_COSTS.has(p.product_id));
+  assert.equal(legacyShirts.length,6,"six historical graphic t-shirts");
+  for(const p of legacyShirts)
     assert.equal(LEGACY_UNIT_COSTS.get(p.product_id),1400,p.slug);
+  assert.ok(!LEGACY_UNIT_COSTS.has(catalog.find(p=>p.slug==="futbolka-planka-sposobnostey").product_id),
+    "new Pages items must not acquire invented historical purchasing costs");
 });
 test("one-click opening checks preserve inventory and use SQL stock values",async()=>{
   const {importOpening}=await api();

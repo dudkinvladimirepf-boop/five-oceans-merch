@@ -64,7 +64,7 @@ function form(){
 
 test("repository removes only the known test product and stock sync form",()=>{
   const products=JSON.parse(fs.readFileSync("data/products.json","utf8"));
-  assert.equal(products.length,9);
+  assert.ok(products.length>=9,"new legitimate catalog items should be kept");
   assert.ok(!products.some(p=>p.product_id===id||p.slug===slug));
   const developers=fs.readFileSync("functions/developers.js","utf8");
   assert.ok(!developers.includes('↻ Синхронизировать с Pages CMS'));
