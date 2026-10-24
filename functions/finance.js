@@ -255,13 +255,19 @@ function formStart(action,token){
   '<input type="hidden" name="action" value="'+esc(action)+'">'+
   '<input type="hidden" name="csrf" value="'+esc(token)+'">';
 }
-// Only already-registered financial products can be received.
+// The product is registered once (by permanent UUID), but each color independently
+// opts in to purchase receipt; stock and historic sales are never re-written.
+function financeApprovedVariant(v){return v?.finance_enabled===true;}
+function financeApprovedProduct(p){
+  return (p?.variants||[]).some(financeApprovedVariant);
+}
 function receiptCatalogChoices(products,financialProducts){
   const registered=new Map(financialProducts.map(p=>[String(p.product_id),String(p.product_slug)]));
   const choices=[];
   for(const p of products){
     if(registered.get(String(p.product_id))!==String(p.slug))continue;
     for(const v of p.variants||[]){
+      if(!financeApprovedVariant(v))continue;
       for(const size of v.sizes||[]){
         choices.push({
           value:JSON.stringify([p.product_id,"v:"+v.code+"|"+size]),
@@ -408,13 +414,16 @@ function show(data,summary,products,token,notice,error,filters={}) {
     ' проданных единиц не имеют зарегистрированной закупочной партии. Прибыль завышена на неизвестную себестоимость. '+
     'Добавьте историю приёмки для этих товаров.</p>';
   html+='<div class="box"><h2>Товары в финансовом учёте</h2>'+
-    '<p class="muted">В Pages CMS отметьте «Передать в финансовый учёт», сохраните карточку и нажмите кнопку ниже. '+ 
-    'Само добавление в финансовый учёт не создаёт складскую позицию и не публикует товар.</p>'+
+    '<p class="muted">В Pages CMS откройте нужный цвет и включите «Передать в финансовый учёт — этот цвет». '+ 
+    'Если модель уже есть в финансах, цвет сразу появится в форме поступления после сохранения Pages. '+ 
+    'Для совершенно новой модели нажмите синхронизацию ниже. Это не добавляет складской остаток и не публикует товар.</p>'+
     formStart("import",token)+'<button type="submit" class="btn-secondary">Синхронизировать товары из Pages CMS</button></form>'+
     '<p class="muted">Закупочная цена за штуку: если были поступления — средневзвешенная по количеству в партиях, если остатков не было — согласованная справочная цена исходного товара. '+
     'Справочная цена не создаёт расход или задолженность. Себестоимость проданного равна 0 ₽ до первой учтённой продажи.</p>'+
     '<div class="scroll"><table><tr><th>Товар</th><th>Цена продажи</th><th>Закупочная цена / шт.</th><th>Начальный остаток</th><th>Новые закупки</th><th>Под реализацию</th><th>Продано</th><th>Выручка</th><th>Себестоимость проданного</th><th>Долг поставщику</th><th>Продано без себестоимости, шт.</th></tr>'+
-    summary.productRows.map(p=>'<tr><td>'+esc(p.title)+'<br><small>'+esc(p.product_slug)+'</small></td><td>'+money(p.list_price)+'</td><td>'+(p.purchaseUnitCost===null?'—':money(p.purchaseUnitCost))+'</td><td>'+p.openingQty+'</td><td>'+p.purchased+'</td><td>'+p.consignment+'</td>'+
+    summary.productRows.map(p=>'<tr><td>'+esc(p.title)+'<br><small>'+esc(p.product_slug)+'</small>'+
+      '<br><small>Цвета для приёмки: '+esc((products.find(x=>String(x.product_id)===String(p.product_id))?.variants||[]).filter(financeApprovedVariant).map(v=>v.label).join(', ')||'не выбраны')+'</small>'+
+      '</td><td>'+money(p.list_price)+'</td><td>'+(p.purchaseUnitCost===null?'—':money(p.purchaseUnitCost))+'</td><td>'+p.openingQty+'</td><td>'+p.purchased+'</td><td>'+p.consignment+'</td>'+
       '<td>'+p.sold+'</td><td>'+money(p.revenue)+'</td><td>'+money(p.cost)+'</td><td>'+money(p.due)+'</td>'+
       '<td>'+p.missing+'</td></tr>').join("")+'</table></div></div>';
   const catalogOptions=receiptCatalogChoices(products,data.products);
@@ -705,10 +714,10 @@ async function perform(context,form) {
   if(action==="opening-import")return importOpening(context);
   if(action==="reconcile-opening-costs")return reconcileOpeningCosts(db);
   if(action==="import"){
-    const items=(await catalog(context)).filter(p=>p.finance_enabled===true &&
+    const items=(await catalog(context)).filter(p=>financeApprovedProduct(p) &&
       /^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(text(p.product_id)) && p.slug && p.title)
       .map(p=>[p.product_id,p.slug,p.title,Number(p.price||0)]);
-    if(!items.length)throw Error("В Pages CMS пока нет товаров с включённым финансовым учётом.");
+    if(!items.length)throw Error("В Pages CMS пока нет цветов, отмеченных для финансового учёта.");
     await db.prepare("INSERT INTO finance_products (product_id,product_slug,title,list_price) SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),json_extract(value,'$[3]') FROM json_each(?) WHERE 1 ON CONFLICT(product_id) DO UPDATE SET product_slug=excluded.product_slug,title=excluded.title,list_price=excluded.list_price,updated_at=CURRENT_TIMESTAMP").bind(JSON.stringify(items)).run();
     return "Синхронизировано товаров в финансовом учёте: "+items.length+".";
   }
@@ -729,8 +738,10 @@ async function perform(context,form) {
     const available=await catalog(context);
     const product=available.find(p=>p.product_id===productId);
     if(!product)throw Error("Товар не найден в Pages. Сначала создайте карточку в Pages.");
-    const valid=(product.variants||[]).some(v=>(v.sizes||[]).some(s=>"v:"+v.code+"|"+s===size));
-    if(!valid)throw Error("Размер или цвет больше не существует в Pages.");
+    const variant=(product.variants||[]).find(v=>(v.sizes||[]).some(s=>"v:"+v.code+"|"+s===size));
+    if(!variant)throw Error("Размер или цвет больше не существует в Pages.");
+    if(!financeApprovedVariant(variant))
+      throw Error("Этот цвет не отмечен «Передать в финансовый учёт» в Pages CMS. Включите переключатель в нужном цвете и сохраните карточку.");
     const imported=await db.prepare("SELECT 1 AS ok FROM finance_products WHERE product_id=? AND product_slug=?").bind(productId,product.slug).first();
     if(!imported)throw Error("Сначала синхронизируйте карточку товара в разделе «Финансы».");
     const excluded=await db.prepare("SELECT 1 AS ok FROM inventory_exclusions WHERE product_slug=? AND size=?").bind(product.slug,size).first();

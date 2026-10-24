@@ -11,6 +11,8 @@ on:
       - "finance-unified.test.cjs"
       - "test-crm-cleanup.test.cjs"
       - "finance-layout.test.cjs"
+      - "finance-color-opt-in.test.cjs"
+      - ".github/workflows/finance-import.yml"
       - "finance-forms.js"
       - "migrations/2026-10-23-finance-opening-batches.sql"
       - "functions/developers.js"
@@ -32,4 +34,4 @@ jobs:
       - run: node --check functions/finance.js
       - run: node --check finance-forms.js
       - run: node --check functions/api/finance/import.js
-      - run: node --test finance.test.cjs finance-opening.test.cjs finance-price-correction.test.cjs finance-receipt-ui.test.cjs finance-unified.test.cjs test-crm-cleanup.test.cjs finance-layout.test.cjs checkout.test.cjs inventory-sync.test.cjs
+      - run: node --test finance.test.cjs finance-opening.test.cjs finance-price-correction.test.cjs finance-receipt-ui.test.cjs finance-unified.test.cjs test-crm-cleanup.test.cjs finance-layout.test.cjs finance-color-opt-in.test.cjs checkout.test.cjs inventory-sync.test.cjs

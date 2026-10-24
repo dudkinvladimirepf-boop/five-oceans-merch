@@ -49,7 +49,7 @@ function submit(sku,supplierName){
   return form;
 }
 
-test("all nine existing financial catalog products appear even with finance_enabled false",async()=>{
+test("all nine existing finance products remain available with per-color approval",async()=>{
   const {receiptCatalogChoices,show,calculate}=await api();
   const all=receiptCatalogChoices(productList,official);
   assert.equal(new Set(all.map(x=>JSON.parse(x.value)[0])).size,9);
@@ -69,7 +69,7 @@ test("all nine existing financial catalog products appear even with finance_enab
 test("new unsynchronized product cannot be received; becomes a choice after finance registration",async()=>{
   const {receiptCatalogChoices}=await api();
   const newcomer={...old,product_id:"new-id-unique",slug:"new-black-tshirt",title:"Футболка «Не как все» чёрная",
-    variants:[{code:"black",label:"Чёрный",sizes:["46-48"]}],finance_enabled:true};
+    variants:[{code:"black",label:"Чёрный",sizes:["46-48"],finance_enabled:true}]};
   const menu=receiptCatalogChoices([...productList,newcomer],official);
   assert.equal(menu.some(p=>p.label.includes("чёрная")),false);
   const after=receiptCatalogChoices([...productList,newcomer],

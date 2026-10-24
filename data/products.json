@@ -8,7 +8,6 @@
     "price": 2600,
     "category": "свитшоты",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -28,7 +27,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "finance_enabled": true
       },
       {
         "code": "white",
@@ -48,7 +48,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "finance_enabled": true
       }
     ]
   },
@@ -61,7 +62,6 @@
     "price": 3800,
     "category": "свитшоты",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -83,7 +83,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "finance_enabled": true
       }
     ]
   },
@@ -96,7 +97,6 @@
     "price": 1900,
     "category": "футболки",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "white",
@@ -119,7 +119,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "finance_enabled": true
       }
     ]
   },
@@ -132,7 +133,6 @@
     "price": 1900,
     "category": "футболки",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -153,7 +153,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": true
+        "new_arrival": true,
+        "finance_enabled": true
       }
     ]
   },
@@ -166,7 +167,6 @@
     "price": 1900,
     "category": "футболки",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -188,7 +188,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "finance_enabled": true
       },
       {
         "code": "navy",
@@ -207,7 +208,8 @@
         ],
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "finance_enabled": true
       }
     ]
   },
@@ -220,7 +222,6 @@
     "price": 1900,
     "category": "футболки",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -240,7 +241,8 @@
         ],
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "finance_enabled": true
       }
     ]
   },
@@ -253,7 +255,6 @@
     "price": 1900,
     "category": "футболки",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -272,7 +273,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": true
+        "new_arrival": true,
+        "finance_enabled": true
       }
     ]
   },
@@ -285,7 +287,6 @@
     "price": 1900,
     "category": "футболки",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "red",
@@ -307,7 +308,8 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "finance_enabled": true
       }
     ]
   },
@@ -320,7 +322,6 @@
     "price": 1100,
     "category": "головные-уборы",
     "published": true,
-    "finance_enabled": false,
     "variants": [
       {
         "code": "navy-white",
@@ -338,7 +339,8 @@
         ],
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "finance_enabled": true
       }
     ]
   }
