@@ -210,18 +210,20 @@ body .hero-button { display:inline-flex; justify-content:center; align-items:cen
 .home-page .showcase .category-info h3:first-child { font-size:14px!important; line-height:1.35; font-weight:500; margin:0; }
 .home-page .showcase .category-info h3:nth-child(2) { font-size:17px!important; font-weight:800; margin:0; }
 .home-page .showcase .open-category { color:var(--fuchsia); font-size:12px; font-weight:600; margin:0; }
-.home-page #featured .categories { grid-template-columns:repeat(auto-fit,minmax(270px,1fr))!important; }
-.home-page #featured .category { min-height:220px; position:relative; }
-.home-page #featured .category-cover { aspect-ratio:auto; min-height:220px; }
-.home-page #featured .category-cover::after {
+/* Новинки — крупный акцентный блок; Наш выбор — компактные товары. */
+.home-page #featured .categories { grid-template-columns:repeat(auto-fill,minmax(170px,220px))!important; }
+.home-page #new-arrivals .categories { grid-template-columns:repeat(auto-fit,minmax(270px,1fr))!important; }
+.home-page #new-arrivals .category { min-height:270px; position:relative; }
+.home-page #new-arrivals .category-cover { aspect-ratio:auto; min-height:270px; }
+.home-page #new-arrivals .category-cover::after {
   content:""; position:absolute; inset:0; background:linear-gradient(0deg,rgba(5,30,58,.72),transparent 70%);
 }
-.home-page #featured .category-info {
+.home-page #new-arrivals .category-info {
   position:absolute; bottom:0; left:0; right:0; color:#fff; z-index:2;
 }
-.home-page #featured .category-info h3:first-child { color:#fff; font-size:17px!important; font-weight:700; }
-.home-page #featured .category-info h3:nth-child(2) { color:#fff; }
-.home-page #featured .open-category { color:#f7a5d8; }
+.home-page #new-arrivals .category-info h3:first-child { color:#fff; font-size:17px!important; font-weight:700; }
+.home-page #new-arrivals .category-info h3:nth-child(2) { color:#fff; }
+.home-page #new-arrivals .open-category { color:#f7a5d8; }
 .home-page .about {
   margin-top:58px; padding:32px 38px; border-radius:18px;
   background:linear-gradient(115deg,#eaf6f8,#eff3f9)!important;
@@ -398,7 +400,9 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .home-page #categories .category-info h3 { font-size:14px!important; }
  .home-page #categories .open-category { width:28px; height:28px; }
  .home-page .showcase .categories { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
- .home-page #featured .categories { grid-template-columns:1fr!important; }
+ .home-page #new-arrivals .categories { grid-template-columns:1fr!important; }
+ .home-page #featured .categories { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
+ .home-page #new-arrivals .category,.home-page #new-arrivals .category-cover { min-height:250px; }
  .home-page .section-side-link { display:none; }
  .home-page .about { padding:22px; }
  .site-footer .footer-content { justify-content:center; text-align:center; }
