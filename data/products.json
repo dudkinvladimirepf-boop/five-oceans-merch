@@ -188,7 +188,7 @@
         ],
         "available": true,
         "featured": false,
-        "new_arrival": true
+        "new_arrival": false
       },
       {
         "code": "navy",
@@ -207,7 +207,7 @@
         ],
         "available": true,
         "featured": true,
-        "new_arrival": false
+        "new_arrival": true
       }
     ]
   },
