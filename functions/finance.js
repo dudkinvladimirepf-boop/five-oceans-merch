@@ -190,6 +190,12 @@ function layout(content,title="Финансы") {
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin:20px 0 30px}
   .stat{padding:20px;background:#f5f7fa;border-radius:12px}
   .stat b{display:block;font-size:27px;margin-top:10px;overflow-wrap:anywhere}
+  .finance-sync{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;background:#eef6fa;border:1px solid #c9dce9;border-radius:12px;padding:18px 22px;margin:-8px 0 20px}
+  .finance-sync strong{display:block;font-size:16px;margin-bottom:4px}
+  .finance-sync .muted{margin:0;max-width:700px}
+  .finance-sync form{flex:none}
+  .finance-sync button{margin:0}
+  @media(max-width:650px){.finance-sync{padding:15px}.finance-sync form,.finance-sync button{width:100%}}
   .muted{color:#71808e;font-size:14px;line-height:1.6}
   .warn{padding:13px 16px;background:#fff6df;border:1px solid #efdfb8;border-radius:9px}
   .ok{background:#eaf7ee;color:#28734a;padding:13px 16px;border-radius:9px}
@@ -477,15 +483,19 @@ function show(data,summary,products,token,notice,error,filters={}) {
   let html=(notice?'<div class="ok">'+esc(notice)+'</div>':"")+
     (error?'<div class="error">'+esc(error)+'</div>':"")+
     '<p class="muted">Закрытый управленческий учёт. Данные поставщиков не публикуются на сайте.</p>'+
-    '<div class="stats">'+stats.map(([name,n])=>'<div class="stat">'+esc(name)+'<b>'+money(n)+'</b></div>').join("")+'</div>'+taxInfo;
+    '<div class="stats">'+stats.map(([name,n])=>'<div class="stat">'+esc(name)+'<b>'+money(n)+'</b></div>').join("")+'</div>'+
+    '<div class="finance-sync" aria-label="Синхронизация товаров с Pages CMS">'+
+    '<div><strong>Товары из Pages CMS</strong>'+
+    '<p class="muted">После создания новой модели или изменения цветов обнови финансовый список. Синхронизация не меняет остатки и не создаёт поступлений.</p></div>'+
+    formStart("import",token)+'<button type="submit" class="btn-secondary">Синхронизировать товары из Pages CMS</button></form>'+
+    '</div>'+taxInfo;
   if(summary.unknownQty)html+='<p class="warn">Внимание: '+summary.unknownQty+
     ' проданных единиц не имеют зарегистрированной закупочной партии. Прибыль завышена на неизвестную себестоимость. '+
     'Добавьте историю приёмки для этих товаров.</p>';
   html+='<details class="box finance-fold"><summary>Товары в финансовом учёте — показать / скрыть</summary><h2>Товары в финансовом учёте</h2>'+
     '<p class="muted">В Pages CMS откройте нужный цвет и включите «Передать в финансовый учёт — этот цвет». '+ 
     'Если модель уже есть в финансах, цвет сразу появится в форме поступления после сохранения Pages. '+ 
-    'Для совершенно новой модели нажмите синхронизацию ниже. Это не добавляет складской остаток и не публикует товар.</p>'+
-    formStart("import",token)+'<button type="submit" class="btn-secondary">Синхронизировать товары из Pages CMS</button></form>'+
+    'Для совершенно новой модели воспользуйтесь кнопкой синхронизации под общими показателями выше. Она не добавляет складской остаток и не публикует товар.</p>'+
     '<p class="muted">Закупочная цена за штуку: если были поступления — средневзвешенная по количеству в партиях, если остатков не было — согласованная справочная цена исходного товара. '+
     'Справочная цена не создаёт расход или задолженность. Себестоимость проданного равна 0 ₽ до первой учтённой продажи.</p>'+
     '<div class="scroll"><table><tr><th>Товар</th><th>Цена продажи</th><th>Закупочная цена / шт.</th><th>Начальный остаток</th><th>Новые закупки</th><th>Под реализацию</th><th>Продано</th><th>Выручка</th><th>Себестоимость проданного</th><th>Долг поставщику</th><th>Продано без себестоимости, шт.</th></tr>'+
