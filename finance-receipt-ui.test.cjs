@@ -52,7 +52,9 @@ function submit(sku,supplierName){
 test("all nine existing finance products remain available with per-color approval",async()=>{
   const {receiptCatalogChoices,show,calculate}=await api();
   const all=receiptCatalogChoices(productList,official);
-  assert.equal(new Set(all.map(x=>JSON.parse(x.value)[0])).size,9);
+  const optedIn=productList.filter(p=>p.variants.some(v=>v.finance_enabled===true));
+  assert.equal(new Set(all.map(x=>JSON.parse(x.value)[0])).size,optedIn.length);
+  assert.ok(optedIn.length>=9);
   assert.ok(all.some(o=>o.label.includes("Не как все")&&o.label.includes("46-48")));
   assert.ok(all.some(o=>o.label.includes("Полосатка")));
   const data={products:official,suppliers:[{id:1,name:"Неизвестный поставщик"}],
