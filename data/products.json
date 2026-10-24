@@ -243,6 +243,28 @@
         "available": true,
         "featured": true,
         "new_arrival": true
+      },
+      {
+        "code": "navy",
+        "label": "Тёмно-синий",
+        "hex": "#232B48",
+        "photos": [
+          "/media/01neobychnayazhizntemnosiniy.png",
+          "/media/02neobychnayazhizntemnosiniy.png",
+          "/media/03neobychnayazhizntemnosiniy.png",
+          "/media/04neobychnayazhizntemnosiniy.png",
+          "/media/05neobychnayazhizntemnosiniy.png",
+          "/media/06neobychnayazhizntemnosiniy.png"
+        ],
+        "sizes": [
+          "46-48",
+          "48-50",
+          "54-56"
+        ],
+        "finance_enabled": true,
+        "available": true,
+        "featured": false,
+        "new_arrival": false
       }
     ]
   },
