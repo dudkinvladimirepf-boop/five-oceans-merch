@@ -86,7 +86,7 @@ test("one finance color selection exposes all allowed sizes",async()=>{
   const registered=products.map(p=>({product_id:p.product_id,product_slug:p.slug,title:p.title,list_price:p.price}));
   const groups=receiptGroupChoices(products,registered);
   const red=groups.find(x=>x.label.includes("Не как все")&&x.label.includes("Красный"));
-  assert.deepEqual(red.sizes,["46-48","48-50","50-52","52-54"]);
+  assert.deepEqual(red.sizes,shirt.variants.find(v=>v.code==="red").sizes);
   assert.ok(groups.some(x=>x.label.includes("Тёмно-синий")));
   const unused=products.map(p=>({...p,variants:p.variants.map(v=>({...v,finance_enabled:false}))}));
   assert.equal(receiptGroupChoices(unused,registered).length,0);
@@ -104,7 +104,7 @@ test("one finance color selection exposes all allowed sizes",async()=>{
 test("one multi-size receipt makes correct stock rows with no zero quantities",async()=>{
   const {perform}=await api();
   const sim=fakeDb();
-  const form=groupForm([["46-48",3],["48-50",0],["50-52",2],["52-54",0]]);
+  const form=groupForm([["46-48",3],["48-50",0],["50-52",2],["56-58",0]]);
   const result=await perform(sim.context,form);
   assert.match(result,/\+5 шт\. на складе \(2 размеров\)/);
   const receipts=sim.writes.filter(x=>/INSERT INTO finance_receipts/.test(x.sql));
