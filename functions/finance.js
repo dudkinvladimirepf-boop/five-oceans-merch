@@ -304,12 +304,13 @@ function receiptGroupChoices(products,financialProducts){
   return results;
 }
 function allocatePayment(total,quantities){
-  const grand=quantities.reduce((s,q)=>s+q,0);
-  let taken=0,paid=0;
+  // Integer arithmetic avoids rounding error for large orders (up to 25 sizes).
+  const grand=quantities.reduce((s,q)=>s+BigInt(q),0n);
+  let taken=0n,paid=0n;
   return quantities.map((qty,index)=>{
-    taken+=qty;
-    const cumulative=index===quantities.length-1?total:Math.floor(total*taken/grand);
-    const value=cumulative-paid;paid=cumulative;return value;
+    taken+=BigInt(qty);
+    const cumulative=index===quantities.length-1?BigInt(total):BigInt(total)*taken/grand;
+    const value=Number(cumulative-paid);paid=cumulative;return value;
   });
 }
 function receiptSizeLines(form,product){
