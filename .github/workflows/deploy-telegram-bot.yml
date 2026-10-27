@@ -1,0 +1,51 @@
+name: Deploy Telegram merchandise bot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-merch-bot-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy existing five-oceans-merch-bot
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout the approved code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check bot/worker.js
+          node --check bot/prepare-deploy.mjs
+
+      - name: Verify live Worker settings and reuse its original D1
+        run: node bot/prepare-deploy.mjs
+
+      - name: Deploy bot (do not touch Pages)
+        run: npx --yes wrangler@4 deploy --config bot/wrangler.generated.jsonc
+
+      - name: Verify Worker responds
+        run: |
+          node --input-type=module <<'NODE'
+          const url = "https://five-oceans-merch-bot.dudkinvladimirepf.workers.dev/";
+          const r = await fetch(url);
+          const text = await r.text();
+          if (!r.ok || !text.includes("Bot worker is running")) {
+            throw Error("Bot health check failed: HTTP " + r.status);
+          }
+          console.log("Bot is running. Telegram webhook and order actions should be tested manually.");
+          NODE
