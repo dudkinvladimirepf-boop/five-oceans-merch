@@ -129,6 +129,16 @@ button {
   font-size: 14px;
   line-height: 1.6;
 }
+.delivery-info {
+  margin: 15px 0 18px;
+  padding: 14px 17px;
+  background: #f2f7fb;
+  border: 1px solid #dce7f0;
+  border-radius: 10px;
+  color: #263f59;
+}
+.delivery-info strong { display: block; font-size: 14px; margin-bottom: 6px; }
+.delivery-info p { margin: 0; font-size: 13px; line-height: 1.65; }
 
 .warning {
   color: #a03b3b;
@@ -301,6 +311,11 @@ button {
       readonly
       aria-label="Текст заказа"
     ></textarea>
+
+    <div class="delivery-info" role="note">
+      <strong>Доставка по всей России</strong>
+      <p>Возможна отправка через Авито Доставку, СДЭК, Ozon и Яндекс Доставку. Подходящий способ, сроки и стоимость доставки обсуждаем с вами индивидуально в Telegram после оформления заказа.</p>
+    </div>
 
     <button
       id="telegram-order"
@@ -902,8 +917,8 @@ function renderCart() {
   summary.appendChild(
     el(
       "p",
-      "Стоимость доставки не включена. " +
-      "Итоговая сумма подтверждается продавцом.",
+      "Доставка не включена в стоимость товаров. " +
+      "Способ и стоимость согласуем с вами в Telegram.",
       "note"
     )
   );
