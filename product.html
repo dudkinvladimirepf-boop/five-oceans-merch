@@ -678,7 +678,8 @@ async function loadProduct() {
       throw new Error("Ошибка загрузки товаров");
     }
 
-    const products = window.StoreI18n?.products(await response.json()) || [];
+    const catalogData = await response.json();
+    const products = window.StoreI18n?.products(catalogData) || catalogData;
 
     if (!Array.isArray(products)) {
       throw new Error("Неверный формат каталога");
