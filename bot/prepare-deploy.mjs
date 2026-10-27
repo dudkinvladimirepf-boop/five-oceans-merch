@@ -45,7 +45,7 @@ if (unknown.length) {
 
 const database = bindings.find(b => b.name === "DB" && b.type === "d1");
 const databaseId = database?.database_id || database?.id;
-if (!/^[0-9a-f]{32}-?[0-9a-f-]*$/i.test(databaseId || "")) {
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(databaseId || "")) {
   // UUID-style D1 IDs are required. Do not create or select another database.
   stop("Original D1 binding DB / database_id not found. Existing CRM must remain unchanged.");
 }
@@ -61,7 +61,7 @@ for (const name of required) {
   }
 }
 const adminBinding = bindings.find(b => b.name === "BOT_ADMIN_ID");
-if (adminBinding.type === "plain_text" && !/^\\d{5,20}$/.test(String(adminBinding.text || ""))) {
+if (adminBinding.type === "plain_text" && !/^[0-9]{5,20}$/.test(String(adminBinding.text || ""))) {
   stop("BOT_ADMIN_ID must be the numeric personal Telegram ID, not @username.");
 }
 
