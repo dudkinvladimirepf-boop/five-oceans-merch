@@ -305,6 +305,7 @@ footer {
 }
 </style>
 <link rel="stylesheet" href="/site-theme.css">
+<script src="/site-i18n.js"></script>
 </head>
 
 <body class="home-page">
@@ -683,7 +684,10 @@ async function loadHomepage() {
       throw new Error("Неверный формат каталога");
     }
 
-    const products = allProducts.filter(p => p && p.published === true);
+    const categoriesLocalized=window.StoreI18n?.categories(categories) || categories;
+    const allProductsLocalized=window.StoreI18n?.products(allProducts) || allProducts;
+    categories.splice(0,categories.length,...categoriesLocalized);
+    const products = allProductsLocalized.filter(p => p && p.published === true);
 
     /* 1. ОСНОВНЫЕ КАТЕГОРИИ */
 
