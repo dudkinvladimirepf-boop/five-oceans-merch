@@ -631,7 +631,7 @@ function restoreRecentOrder() {
     if (typeof saved.order_id !== "string" || typeof saved.text !== "string") return;
 
     recentOrderTitle.textContent = "Заказ № " + saved.order_id + " создан";
-    recentOrderPreview.value = saved.text;
+    recentOrderPreview.value = window.StoreI18n?.orderText(saved.text) || saved.text;
     recentOrderBotLink.href = telegramOrderUrl(saved.order_id);
     recentOrderSection.hidden = false;
     repeatOrderButton.hidden = !validRepeatItems(saved.items);
@@ -731,9 +731,9 @@ function updateOrderPreview(hasUnavailable) {
     : "Создать заказ и скопировать";
 
   if (!canCheckout) {
-    orderPreview.value =
-      "В корзине есть недоступные позиции. " +
-      "Удалите их или измените заказ, чтобы продолжить оформление.";
+    orderPreview.value = window.StoreI18n?.lang === "en"
+      ? "Some items are unavailable. Remove them or update your cart to check out."
+      : "В корзине есть недоступные позиции. Удалите их или измените заказ, чтобы продолжить оформление.";
     return;
   }
 
