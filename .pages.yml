@@ -37,6 +37,11 @@ content:
         type: string
         required: true
 
+      - name: title_en
+        label: Название товара на английском
+        type: string
+        description: Показывается посетителям при выборе EN. Заполните для новых товаров.
+
       - name: slug
         label: Адрес товара
         type: string
@@ -48,10 +53,20 @@ content:
         label: Описание
         type: text
 
+      - name: description_en
+        label: Описание на английском
+        type: text
+        description: Отдельное описание для англоязычной версии магазина. Русское описание не заменяет.
+
       - name: design
         label: Дизайн / надпись (для учёта)
         type: string
         description: Общая вышивка, принт или текст для всех цветов этого товара. Для другой надписи создавайте отдельную карточку — так CRM не смешает остатки разных дизайнов.
+
+      - name: design_en
+        label: Дизайн / надпись на английском
+        type: string
+        description: Английский текст дизайна для карточки товара.
 
       - name: price
         label: Цена в рублях
@@ -103,6 +118,11 @@ content:
             type: string
             required: true
             description: Например Красный. Покупатель выбирает цвет кружком; название показывается в корзине и CRM.
+          - name: label_en
+            label: Название цвета на английском
+            type: string
+            description: Например Red или Navy blue. Русское название цвета сохраняется для CRM.
+
           - name: hex
             label: Цвет кружка
             type: string
@@ -152,6 +172,10 @@ content:
         type: string
         required: true
 
+      - name: title_en
+        label: Название категории на английском
+        type: string
+
       - name: id
         label: Идентификатор категории
         type: string
@@ -166,6 +190,10 @@ content:
 
       - name: description
         label: Описание категории
+        type: text
+
+      - name: description_en
+        label: Описание категории на английском
         type: text
 
       - name: image
