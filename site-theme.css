@@ -55,6 +55,20 @@ body > header.site-header {
   display:flex; justify-content:flex-end; align-items:center; gap:20px;
   min-width:0; font-size:14px;
 }
+.site-header .store-language {
+ display:flex; align-items:center; gap:3px; flex:none;
+ font:600 11px 'Geologica',Arial,sans-serif;
+ color:#a7b2c3; white-space:nowrap; border-left:1px solid var(--line);
+ padding-left:13px;
+}
+.site-header .store-lang-button {
+ border:0; background:transparent; color:#8896a9; padding:6px 4px;
+ font:inherit; cursor:pointer; border-radius:4px;
+}
+.site-header .store-lang-button.active {color:var(--navy);font-weight:800;}
+.site-header .store-lang-button:hover {color:var(--fuchsia);}
+.site-header .store-lang-button:focus-visible {outline:2px solid var(--fuchsia);outline-offset:2px;}
+
 .site-header .site-search {
   background:#f1f3f7; color:var(--navy); border-radius:100px;
   padding:0 14px; display:flex; align-items:center; gap:9px;
@@ -393,6 +407,8 @@ body:not(.home-page) .category-promo { color:var(--muted); }
  .site-header .site-actions.menu { order:3; gap:6px; }
  .site-header .site-search { flex:none; width:155px; height:34px; padding:0 10px; }
  .site-header .site-search input { font-size:11px; }
+ .site-header .store-language {padding-left:9px;gap:1px;}
+ .site-header .store-lang-button {padding:6px 2px;}
  .site-header .global-cart-link .cart-word { display:none; }
  .site-header .global-cart-link { margin-left:6px!important; }
  .home-page .hero { min-height:395px; padding:64px 20px 65px!important; background-position:center,58% center,58% center!important; }

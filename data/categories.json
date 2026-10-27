@@ -4,34 +4,44 @@
     "id": "футболки",
     "slug": "futbolki",
     "description": "Футболки и лонгсливы Клуба «5 океанов»",
-    "image": ""
+    "image": "",
+    "title_en": "T-shirts and Long Sleeves",
+    "description_en": "Five Oceans Club T-shirts and long-sleeved tops"
   },
   {
     "title": "Толстовки и куртки",
     "id": "свитшоты",
     "slug": "svitshoty",
     "description": "Худи, свитшоты, жилеты и дождевые куртки Клуба «5 океанов»",
-    "image": ""
+    "image": "",
+    "title_en": "Hoodies and Jackets",
+    "description_en": "Five Oceans Club hoodies, sweatshirts, vests and rain jackets"
   },
   {
     "title": "Носки",
     "id": "носки",
     "slug": "noski",
     "description": "Носки Клуба «5 океанов»",
-    "image": ""
+    "image": "",
+    "title_en": "Socks",
+    "description_en": "Five Oceans Club socks"
   },
   {
     "title": "Головные уборы",
     "id": "головные-уборы",
     "slug": "golovnye-ubory",
     "description": "Шапки, кепки и панамы Клуба «5 океанов»",
-    "image": ""
+    "image": "",
+    "title_en": "Headwear",
+    "description_en": "Five Oceans Club beanies, caps and sun hats"
   },
   {
     "title": "Аксессуары и сувениры",
     "id": "аксессуары",
     "slug": "aksessuary",
     "description": "Бафы, платки, шопперы, альманахи, брелоки и другие сувениры",
-    "image": ""
+    "image": "",
+    "title_en": "Accessories and Gifts",
+    "description_en": "Neck gaiters, scarves, tote bags, almanacs, keyrings and souvenirs"
   }
 ]

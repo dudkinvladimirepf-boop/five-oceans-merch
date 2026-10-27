@@ -252,6 +252,7 @@ button {
 }
 </style>
 <link rel="stylesheet" href="/site-theme.css">
+<script src="/site-i18n.js"></script>
 </head>
 
 <body>
@@ -590,7 +591,7 @@ function composeOrderText(items, number) {
   lines.push("");
   lines.push("Пожалуйста, подтвердите наличие и итоговую стоимость.");
 
-  return lines.join("\n");
+  return window.StoreI18n?.orderText(lines.join("\n")) || lines.join("\n");
 }
 
 function validRepeatItems(items) {
@@ -630,7 +631,7 @@ function restoreRecentOrder() {
     if (typeof saved.order_id !== "string" || typeof saved.text !== "string") return;
 
     recentOrderTitle.textContent = "Заказ № " + saved.order_id + " создан";
-    recentOrderPreview.value = saved.text;
+    recentOrderPreview.value = window.StoreI18n?.orderText(saved.text) || saved.text;
     recentOrderBotLink.href = telegramOrderUrl(saved.order_id);
     recentOrderSection.hidden = false;
     repeatOrderButton.hidden = !validRepeatItems(saved.items);
@@ -730,9 +731,9 @@ function updateOrderPreview(hasUnavailable) {
     : "Создать заказ и скопировать";
 
   if (!canCheckout) {
-    orderPreview.value =
-      "В корзине есть недоступные позиции. " +
-      "Удалите их или измените заказ, чтобы продолжить оформление.";
+    orderPreview.value = window.StoreI18n?.lang === "en"
+      ? "Some items are unavailable. Remove them or update your cart to check out."
+      : "В корзине есть недоступные позиции. Удалите их или измените заказ, чтобы продолжить оформление.";
     return;
   }
 
@@ -1186,7 +1187,8 @@ async function init() {
       throw new Error("Ошибка загрузки");
     }
 
-    products = await response.json();
+    const catalogData = await response.json();
+    products = window.StoreI18n?.products(catalogData) || catalogData;
 
     if (!Array.isArray(products)) {
       throw new Error("Неверный формат каталога");

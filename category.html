@@ -274,6 +274,7 @@ footer {
 
 </style>
 <link rel="stylesheet" href="/site-theme.css">
+<script src="/site-i18n.js"></script>
 </head>
 
 <body>
@@ -558,6 +559,9 @@ async function loadCategory() {
         "Неверный формат данных"
       );
     }
+
+    categories.splice(0,categories.length,...(window.StoreI18n?.categories(categories) || categories));
+    products.splice(0,products.length,...(window.StoreI18n?.products(products) || products));
 
     /* Поиск категории */
 

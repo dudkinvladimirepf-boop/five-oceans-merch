@@ -10,6 +10,7 @@ h1{font-size:clamp(26px,3.8vw,40px);margin:0 0 12px}
 .search-description{color:#617383;margin:0 0 28px}
 </style>
 <link rel="stylesheet" href="/site-theme.css">
+<script src="/site-i18n.js"></script>
 </head>
 <body>
 <header></header>
@@ -86,9 +87,11 @@ function catalogHighlighted(product, field) {
     if (!productsResponse.ok || !categoriesResponse.ok) {
       throw new Error("Ошибка загрузки каталога");
     }
-    const [products,categories] = await Promise.all([
+    let [products,categories] = await Promise.all([
       productsResponse.json(),categoriesResponse.json()
     ]);
+    products=window.StoreI18n?.products(products)||products;
+    categories=window.StoreI18n?.categories(categories)||categories;
     if (!Array.isArray(products) || !Array.isArray(categories)) {
       throw new Error("Некорректный формат каталога");
     }
@@ -99,8 +102,8 @@ function catalogHighlighted(product, field) {
       if (collection === "featured" && !catalogHighlighted(p, "featured")) return false;
       if (!searchTerm) return true;
       const combined = [
-        p.title,p.description,p.slug,
-        ...(Array.isArray(p.variants) ? p.variants.map(v => v?.label) : []),
+        p.title,p.title_ru,p.description,p.description_ru,p.slug,
+        ...(Array.isArray(p.variants) ? p.variants.flatMap(v => [v?.label,v?.label_ru]) : []),
         categoryNames.get(normalize(p.category))
       ].map(normalize).join(" ");
       return combined.includes(normalize(searchTerm));

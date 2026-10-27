@@ -28,7 +28,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Red"
       },
       {
         "code": "white",
@@ -49,9 +50,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "White"
       }
-    ]
+    ],
+    "title_en": "Five Oceans Club Sweatshirt",
+    "description_en": "A classic Five Oceans Club sweatshirt with a subtle embroidered club logo on the chest.\n\nThe timeless crew-neck design features long sleeves and ribbed cuffs. Its understated style makes it easy to wear every day, on a walk or while travelling.\n\n**Details:**\n- Material: cotton\n- Chest: embroidered Five Oceans Club logo\n- Sleeves: long\n- Neckline: crew neck\n- Back: plain, without a print\n- Made in Russia",
+    "design_en": "Embroidered Five Oceans Club logo"
   },
   {
     "product_id": "d233280c-ab61-41e7-a3bd-c7682b38bc81",
@@ -84,9 +89,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Red"
       }
-    ]
+    ],
+    "title_en": "Five Oceans Club Hoodie",
+    "description_en": "The Five Oceans Club hoodie combines everyday comfort with the unmistakable style of a club for seafarers, travellers and explorers.\n\nMade of cotton, this classic hoodie has an adjustable drawstring hood, a practical kangaroo pocket and an embroidered club logo on the chest. The minimal design works just as well on a journey as it does at home.\n\n**Details:**\n- Material: cotton\n- Chest: embroidered Five Oceans Club logo\n- Hood: adjustable drawstrings\n- Pocket: front kangaroo pocket\n- Sleeves: long, with ribbed cuffs\n- Hem: elastic ribbed band\n- Back: plain, without text or prints",
+    "design_en": "Embroidered Five Oceans Club logo"
   },
   {
     "product_id": "2114867b-3c44-483f-9c45-d5acea342836",
@@ -120,9 +129,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "White"
       }
-    ]
+    ],
+    "title_en": "Five Oceans Club T-shirt — Sailboat",
+    "description_en": "The Five Oceans Club “Sailboat” T-shirt is part of our collection inspired by sailors and ocean explorers.\n\nA comfortable cotton T-shirt with a small club logo on the chest and a striking nautical illustration on the back: a sailing yacht crossing ocean waves, a symbol of freedom, travel and new horizons.\n\nThe classic fit, crew neckline and short sleeves make it a versatile choice for everyday wear.\n\n**Details:**\n- Material: cotton\n- Front: Five Oceans Club logo\n- Back: full-colour sailboat and ocean-wave print\n- Sleeves: short\n- Neckline: crew neck\n- Made in Russia",
+    "design_en": "Club logo on the front, sailboat on ocean waves on the back"
   },
   {
     "product_id": "63ab85af-1303-44c0-b588-f482f1b251a7",
@@ -154,7 +167,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Red"
       },
       {
         "code": "navy",
@@ -176,7 +190,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Navy blue"
       },
       {
         "code": "black",
@@ -199,9 +214,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Black"
       }
-    ]
+    ],
+    "title_en": "T-shirt — Ocean with a Capital O",
+    "description_en": "The “Ocean with a Capital O” T-shirt is inspired by a quote from Oleg Dudkin: “I always write Ocean with a capital O.”\n\nThe words express a deep connection to the sea and a belief that the Ocean is more than a place on a map. The front features the understated Five Oceans Club logo, while the back carries the original Russian-language quote.\n\nMade of cotton with a classic crew neck and short sleeves, it is ideal for travel and everyday adventures.",
+    "design_en": "Oleg Dudkin quotation: “I always write Ocean with a capital O”"
   },
   {
     "product_id": "1cab5aa8-9717-4756-88e7-317ba95dc9be",
@@ -234,7 +253,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Red"
       },
       {
         "code": "navy",
@@ -254,7 +274,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Navy blue"
       },
       {
         "code": "black",
@@ -277,9 +298,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Black"
       }
-    ]
+    ],
+    "title_en": "T-shirt — Not Like Everyone Else",
+    "description_en": "The “Not Like Everyone Else” T-shirt celebrates people who choose their own path.\n\nThe design features a quote by renowned explorer Fyodor Konyukhov: “The world rests on people who do not live like everyone else.” It is a tribute to independence, courage and the determination to discover what lies beyond the familiar.\n\nA Five Oceans Club logo is printed on the chest, while the original Russian-language quotation and its attribution appear on the back.\n\n**Details:**\n- Material: cotton\n- Front: Five Oceans Club logo\n- Back: quote by Fyodor Konyukhov\n- Sleeves: short\n- Neckline: crew neck\n- Made in Russia",
+    "design_en": "Fyodor Konyukhov quotation: “The world rests on people who do not live like everyone else”"
   },
   {
     "product_id": "c6e83d8c-ab0a-42d4-a7dc-dbb1607a938e",
@@ -310,7 +335,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Red"
       },
       {
         "code": "navy",
@@ -332,7 +358,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Navy blue"
       },
       {
         "code": "black",
@@ -355,9 +382,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Black"
       }
-    ]
+    ],
+    "title_en": "T-shirt — Extraordinary Life",
+    "description_en": "The “Extraordinary Life” T-shirt is dedicated to ocean exploration and people who dare to live beyond the ordinary.\n\nIt features words attributed to legendary ocean explorer Jacques-Yves Cousteau: “If a person has the opportunity to lead an extraordinary life, they have no right to refuse it.”\n\nThe quote embodies discovery, freedom and the courage to follow a dream. A white Five Oceans Club logo appears on the chest; the original Russian-language quotation and Cousteau’s name are printed on the back.\n\n**Details:**\n- Material: cotton\n- Front: Five Oceans Club logo\n- Back: Jacques-Yves Cousteau quotation\n- Sleeves: short\n- Neckline: crew neck",
+    "design_en": "Jacques-Yves Cousteau quotation about an extraordinary life"
   },
   {
     "product_id": "f74d03ce-a0aa-4f04-a738-c60a9221cec1",
@@ -387,7 +418,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Red"
       },
       {
         "code": "navy",
@@ -408,7 +440,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Navy blue"
       },
       {
         "code": "black",
@@ -432,9 +465,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Black"
       }
-    ]
+    ],
+    "title_en": "T-shirt — Impossible Challenges",
+    "description_en": "The “Impossible Challenges” T-shirt is for dreamers and explorers who set themselves ambitious goals.\n\nInspired by Jacques-Yves Cousteau’s words, “Only impossible tasks succeed,” it celebrates resilience and the belief that major discoveries begin with challenges that seem out of reach.\n\nThe front bears a white Five Oceans Club logo, while the back carries the original Russian-language quote and Cousteau’s name.\n\n**Details:**\n- Material: cotton\n- Front: Five Oceans Club logo\n- Back: Jacques-Yves Cousteau quotation\n- Sleeves: short\n- Neckline: crew neck",
+    "design_en": "Jacques-Yves Cousteau quotation about impossible challenges"
   },
   {
     "product_id": "056aca62-9e79-4fa3-8d0b-647f35f30402",
@@ -467,7 +504,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Red"
       },
       {
         "code": "navy",
@@ -488,7 +526,8 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Navy blue"
       },
       {
         "code": "black",
@@ -512,9 +551,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": false
+        "new_arrival": false,
+        "label_en": "Black"
       }
-    ]
+    ],
+    "title_en": "T-shirt — Tired Mountaineers",
+    "description_en": "The “Tired Mountaineers” T-shirt brings humour to the spirit of adventure at sea.\n\nIts design features a witty remark by Oleg Dudkin, founder of the Five Oceans Club: “Who are yachtsmen? Tired mountaineers.” Mountains and oceans attract people who share a love of freedom and the courage to meet the elements.\n\nA club logo is printed on the chest; the back features the original Russian-language quote and Oleg Dudkin’s name.\n\n**Details:**\n- Material: cotton\n- Front: Five Oceans Club logo\n- Back: Oleg Dudkin quotation\n- Sleeves: short\n- Neckline: crew neck",
+    "design_en": "Oleg Dudkin quotation: “Who are yachtsmen? Tired mountaineers”"
   },
   {
     "product_id": "6fa7f415-e6e3-4b9d-b408-e8cc0da44cf7",
@@ -543,9 +586,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Navy and white stripes"
       }
-    ]
+    ],
+    "title_en": "Mariner Stripe Beanie",
+    "description_en": "The “Mariner Stripe” beanie is inspired by nautical traditions and life at sea.\n\nClassic navy and white horizontal stripes evoke traditional sailor clothing. A woven Five Oceans Club patch on the front adds a signature detail.\n\nSoft knit fabric and a comfortable shape make this beanie a practical choice for walks, travel, sailing and everyday wear.\n\n**Details:**\n- Type: knitted beanie\n- Pattern: navy blue and white horizontal stripes\n- Decoration: woven Five Oceans Club logo patch\n- Patch position: front left when viewed from the front\n- Style: nautical, casual\n- Colours: navy blue and white\n- For: everyday wear, travel and sailing",
+    "design_en": "Navy-and-white striped beanie with a Five Oceans Club patch"
   },
   {
     "product_id": "0cefa9f8-a7a9-441a-b86b-8a76549a6fba",
@@ -575,9 +622,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Black"
       }
-    ]
+    ],
+    "title_en": "T-shirt — Pushing Human Limits",
+    "description_en": "The “Pushing Human Limits” T-shirt celebrates determination and the drive to go further.\n\nIt is inspired by explorer Fyodor Konyukhov’s words: “I pray to God for strength to raise the limits of human capability.” The message reflects the courage to set challenging goals and discover new horizons.\n\nThe chest features the Five Oceans Club logo; the back has a contrasting white print with the original Russian-language quote and Konyukhov’s name.\n\n**Details:**\n- Material: cotton\n- Front: Five Oceans Club logo\n- Back: quote by Fyodor Konyukhov\n- Sleeves: short\n- Neckline: crew neck",
+    "design_en": "Fyodor Konyukhov quotation about pushing human limits"
   },
   {
     "product_id": "ef33064f-7629-48c8-b750-ce6325d8c1ca",
@@ -607,9 +658,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": false,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Red"
       }
-    ]
+    ],
+    "title_en": "Five Oceans Club Rain Jacket",
+    "description_en": "A lightweight, compact Five Oceans Club rain jacket for travel, walks and outdoor adventures.\n\nThe bright red jacket features a discreet club logo on the chest, a hood, full-length zip fastening and elastic cuffs.\n\nIt folds into its own branded storage pouch, making it easy to carry in a backpack or travel bag.\n\n**Details:**\n- Material: lightweight synthetic fabric\n- Colour: red\n- Fastening: zip\n- Hood: included\n- Cuffs: elastic\n- Chest: Five Oceans Club logo\n- Back: plain\n- Included: rain jacket and branded storage pouch",
+    "design_en": "Five Oceans Club logo on the chest"
   },
   {
     "product_id": "181d0e16-12e9-4623-8c7c-343a9144aff0",
@@ -637,9 +692,13 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "Blue and light blue"
       }
-    ]
+    ],
+    "title_en": "Sea Captain Socks",
+    "description_en": "The “Sea Captain” socks are a playful nautical accessory for travellers and ocean lovers.\n\nThis pair tells two stories: one sock features a smiling captain in a red knit hat, while the other shows a research ship sailing through ocean waves. A blue palette and contrasting details give the design its distinctive maritime feel.\n\nA fun gift for sailors, explorers and anyone drawn to the sea.\n\n**Details:**\n- Type: illustrated socks\n- Theme: nautical\n- Colours: blue and light blue\n- First sock: captain in a red hat\n- Second sock: ship on ocean waves\n- Cuff: elastic, light blue\n- Included: one pair\n- Packaging: branded cardboard box",
+    "design_en": "Captain in a red hat and a research vessel on ocean waves"
   },
   {
     "product_id": "da33320e-68a5-4062-af01-8c1e29d30556",
@@ -667,8 +726,12 @@
         "finance_enabled": true,
         "available": true,
         "featured": true,
-        "new_arrival": true
+        "new_arrival": true,
+        "label_en": "2025 edition"
       }
-    ]
+    ],
+    "title_en": "Jacques-Yves Cousteau Almanac",
+    "description_en": "The “Jacques-Yves Cousteau” Almanac is an illustrated print publication dedicated to the life, voyages and scientific work of the legendary ocean explorer.\n\nDiscover the story of the man who introduced millions of people to the underwater world and transformed our understanding of the ocean. The almanac explores Cousteau’s expeditions, scientific discoveries, inventions, underwater laboratories and the remarkable people he worked with.\n\nHistorical photographs, archival materials, illustrations and articles make this a compelling read and a thoughtful gift for anyone fascinated by ocean exploration.\n\n**Details:**\n- Type: printed illustrated almanac\n- Title: Jacques-Yves Cousteau\n- Edition: 2025\n- Subject: Cousteau’s life and expeditions\n- Content: historical articles, photographs and illustrations\n- Publication language: Russian\n- Format: printed illustrated edition",
+    "design_en": "Illustrated Jacques-Yves Cousteau almanac, 2025 edition"
   }
 ]
