@@ -78,3 +78,23 @@ test("all six public pages load language module before their own scripts",()=>{
  assert.match(fs.readFileSync(".pages.yml","utf8"),/name: label_en/);
  assert.match(fs.readFileSync("cart.html","utf8"),/StoreI18n\?\.orderText/);
 });
+
+
+test("cart shows nationwide shipping options next to the order button in both languages",()=>{
+  const html=fs.readFileSync("cart.html","utf8");
+  const note=html.indexOf('class="delivery-info"');
+  const button=html.indexOf('id="telegram-order"');
+  assert.ok(note>0 && button>note && button-note<900,
+    "delivery information should appear directly before the checkout button");
+  for(const carrier of ["Авито Доставку","СДЭК","Ozon","Яндекс Доставку"])
+    assert.ok(html.includes(carrier),carrier);
+  assert.match(html,/Способ и стоимость согласуем с вами в Telegram/);
+  const en=locale("en");
+  assert.equal(en.t("Доставка по всей России"),"Delivery Across Russia");
+  const text="Возможна отправка через Авито Доставку, СДЭК, Ozon и Яндекс Доставку. Подходящий способ, сроки и стоимость доставки обсуждаем с вами индивидуально в Telegram после оформления заказа.";
+  const translated=en.t(text);
+  for(const carrier of ["Avito Delivery","CDEK","Ozon","Yandex Delivery"])
+    assert.ok(translated.includes(carrier),carrier);
+  assert.equal(en.t("Доставка не включена в стоимость товаров. Способ и стоимость согласуем с вами в Telegram."),
+    "Shipping is not included in the item total. We will agree on the delivery method and cost with you on Telegram.");
+});
