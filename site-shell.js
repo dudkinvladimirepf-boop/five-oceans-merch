@@ -48,9 +48,21 @@
                    aria-label="Поиск товаров" placeholder="Поиск товаров...">
           </form>
           <!-- Кнопка корзины добавляется рабочим cart-nav.js -->
+          <div class="store-language" role="group" aria-label="Language / Язык">
+            <button type="button" class="store-lang-button" data-store-lang="ru" aria-label="Русский язык" aria-pressed="false">RU</button>
+            <span aria-hidden="true">/</span>
+            <button type="button" class="store-lang-button" data-store-lang="en" aria-label="English language" aria-pressed="false">EN</button>
+          </div>
         </div>
       </nav>`;
   }
+
+  header?.querySelectorAll("[data-store-lang]").forEach(button => {
+    const selected=button.dataset.storeLang===window.StoreI18n?.lang;
+    button.classList.toggle("active",selected);
+    button.setAttribute("aria-pressed",String(selected));
+    button.addEventListener("click",()=>window.StoreI18n?.setLanguage(button.dataset.storeLang));
+  });
 
   // Меню категорий читает тот же файл Pages CMS, что и каталог.
   // Новые или переименованные категории появляются без правок HTML.
@@ -62,6 +74,7 @@
       })
       .then(categories => {
         if (!Array.isArray(categories)) return;
+        categories=window.StoreI18n?.categories(categories) || categories;
         const menu = header.querySelector("#nav-catalog-menu");
         if (!menu) return;
         for (const category of categories) {
