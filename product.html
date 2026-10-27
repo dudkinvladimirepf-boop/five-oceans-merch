@@ -425,6 +425,7 @@ footer {
 }
 </style>
 <link rel="stylesheet" href="/site-theme.css">
+<script src="/site-i18n.js"></script>
 </head>
 
 <body>
@@ -677,7 +678,7 @@ async function loadProduct() {
       throw new Error("Ошибка загрузки товаров");
     }
 
-    const products = await response.json();
+    const products = window.StoreI18n?.products(await response.json()) || [];
 
     if (!Array.isArray(products)) {
       throw new Error("Неверный формат каталога");
@@ -709,6 +710,7 @@ async function loadProduct() {
       })
       .then(categories => {
         if (!Array.isArray(categories)) return;
+        categories=window.StoreI18n?.categories(categories)||categories;
         const category = categories.find(
           entry => entry && entry.id === product.category
         );
@@ -1066,6 +1068,7 @@ async function loadProduct() {
     .then(categories => {
 
       if (!Array.isArray(categories)) return;
+      categories=window.StoreI18n?.categories(categories)||categories;
 
       const category = categories.find(c =>
         String(c.id ?? "").trim().toLowerCase() ===
