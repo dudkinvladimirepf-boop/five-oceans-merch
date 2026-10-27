@@ -252,6 +252,7 @@ button {
 }
 </style>
 <link rel="stylesheet" href="/site-theme.css">
+<script src="/site-i18n.js"></script>
 </head>
 
 <body>
@@ -590,7 +591,7 @@ function composeOrderText(items, number) {
   lines.push("");
   lines.push("Пожалуйста, подтвердите наличие и итоговую стоимость.");
 
-  return lines.join("\n");
+  return window.StoreI18n?.orderText(lines.join("\n")) || lines.join("\n");
 }
 
 function validRepeatItems(items) {
@@ -1186,7 +1187,7 @@ async function init() {
       throw new Error("Ошибка загрузки");
     }
 
-    products = await response.json();
+    products = window.StoreI18n?.products(await response.json()) || [];
 
     if (!Array.isArray(products)) {
       throw new Error("Неверный формат каталога");
