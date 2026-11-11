@@ -5,13 +5,16 @@
 
 const SITE = "https://five-oceans-merch.pages.dev";
 const MAIN_BUTTON = "🏠 Главное меню";
+const CATALOG_BUTTON = "🛍 Каталог";
+const CART_BUTTON = "🛒 Корзина";
+const ADMIN_BUTTON = "⚙️ Управление";
 const PAGE_SIZE = 8;
 const MAX_QUANTITY = 99;
 const MAX_ORDER_ITEMS = 40;
 const COLOR_CODE_RE = /^[a-z0-9][a-z0-9-]{0,24}$/;
 const ORDER_ID_RE = /^FO-\d{8}-[0-9A-F]{12}$/;
 const ADMIN_SESSION_SECONDS = 8 * 3600;
-const ADMIN_LOGIN_SECONDS = 180;
+const ADMIN_LOGIN_SECONDS = 600;
 const ADMIN_LOCK_SECONDS = 15 * 60;
 const ADMIN_MAX_FAILURES = 5;
 const ADMIN_PAGE_SIZE = 8;
@@ -329,22 +332,50 @@ async function showUnifiedCard(env, cb, photo, caption, keyboard) {
   });
 }
 
-async function welcome(env, chatId) {
+// Постоянная клавиатура доступна из любого раздела.
+// Кнопка администратора появляется только для BOT_ADMIN_ID.
+function persistentMenu(env, userId) {
+  const secondRow = [{ text: CART_BUTTON }];
+  if (isBotAdmin(env, userId)) secondRow.push({ text: ADMIN_BUTTON });
+  return {
+    keyboard: [[{ text: MAIN_BUTTON }, { text: CATALOG_BUTTON }], secondRow],
+    resize_keyboard: true,
+    is_persistent: true,
+    input_field_placeholder: "Выберите раздел"
+  };
+}
+
+function mainMenuButtons(env, userId) {
+  return [
+    [{ text: "🛍 Каталог товаров", callback_data: "catalog" }],
+    [{ text: "🛒 Моя корзина", callback_data: "cart:0" }],
+    ...(isBotAdmin(env, userId)
+      ? [[{ text: ADMIN_BUTTON, callback_data: "ad:home" }]]
+      : [])
+  ];
+}
+
+function textCallback(message) {
+  return { from: message.from, message: { chat: message.chat } };
+}
+
+async function showMainMenu(env, cb) {
+  return sendScreen(env, cb,
+    "🏠 ГЛАВНОЕ МЕНЮ\n\n🌊 Клуб «5 океанов» × ОКЕАН HD\n\nВыберите раздел:",
+    mainMenuButtons(env, cb.from?.id)
+  );
+}
+
+async function welcome(env, chatId, userId = chatId) {
   await telegram(env, "sendMessage", {
     chat_id: chatId,
     text: "🌊 Добро пожаловать в магазин!\n\n⛵ Клуб «5 океанов» × ОКЕАН HD\n\n👕 Фирменная одежда и сувениры.",
-    reply_markup: { keyboard: [[{ text: MAIN_BUTTON }]], resize_keyboard: true, is_persistent: true }
+    reply_markup: persistentMenu(env, userId)
   });
   await telegram(env, "sendMessage", {
     chat_id: chatId,
     text: "🛍 Выберите действие:",
-    reply_markup: { inline_keyboard: [
-      [{ text: "🛍 Каталог товаров", callback_data: "catalog" }],
-      [{ text: "🛒 Моя корзина", callback_data: "cart:0" }],
-      ...(isBotAdmin(env, chatId)
-        ? [[{ text: "⚙️ Управление", callback_data: "ad:home" }]]
-        : [])
-    ] }
+    reply_markup: { inline_keyboard: mainMenuButtons(env, userId) }
   });
 }
 
@@ -1079,7 +1110,7 @@ async function adminPrompt(env, cb) {
   ).bind(String(userId), now + ADMIN_LOGIN_SECONDS, now, now).run();
   await sendScreen(env, cb,
     "🔐 Вход в управление\n\nОтправьте пароль отдельным сообщением в этот чат. " +
-    "На ввод даётся 3 минуты. Сообщение с паролем бот попытается сразу удалить.\n\n" +
+    "На ввод даётся 10 минут. Сообщение с паролем бот попытается сразу удалить.\n\n" +
     "После входа сессия действует 8 часов.",
     [[{ text: "❌ Отмена", callback_data: "ad:cancel" }]]
   );
@@ -1094,7 +1125,20 @@ async function maybeHandleAdminPassword(env, message) {
   await ensureAdminAuthTable(env);
   const row = await adminAuthRow(env, message.from.id);
   const now = adminNow();
-  if (!row || Number(row.login_expires) <= now) return false;
+  if (!row) return false;
+  // Устаревшая форма больше не должна выглядеть как «бот молчит».
+  if (Number(row.login_expires) > 0 && Number(row.login_expires) <= now) {
+    await db(env).prepare(
+      `UPDATE bot_admin_auth SET login_expires = 0 WHERE telegram_user_id = ?`
+    ).bind(String(message.from.id)).run();
+    await telegram(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: "⏳ Время ввода пароля истекло. Нажмите «⚙️ Управление» и введите пароль ещё раз.",
+      reply_markup: { inline_keyboard: [[{ text: ADMIN_BUTTON, callback_data: "ad:home" }]] }
+    });
+    return true;
+  }
+  if (Number(row.login_expires) <= now) return false;
   if (Number(row.authenticated_until) > now &&
       row.secret_tag === await adminSecretTag(env)) return false;
   // Не записываем пароль в логи и не пересылаем администратору.
@@ -1609,24 +1653,55 @@ export default {
     try {
       const message = update.message;
       if (message?.chat?.type === "private" && message.text) {
-        const text = message.text.trim();
-        const orderId = parseSiteOrder(text);
+        const raw = message.text.trim();
+        const command = raw.toLowerCase();
+        const actorId = message.from?.id;
+        const cbFromMessage = textCallback(message);
+        const orderId = parseSiteOrder(raw);
         if (orderId) {
-          await welcome(env, message.chat.id);
+          await welcome(env, message.chat.id, actorId);
           await claimSiteOrder(env, message, orderId);
-        } else if (text === "/logout" && isBotAdmin(env, message.from.id)) {
-          await adminLogout(env, message.from.id);
-          await telegram(env, "sendMessage", { chat_id: message.chat.id, text: "🔒 Выход выполнен." });
-        } else if (/^\/start(?:@\w+)?(?:\s|$)/.test(text) || text === MAIN_BUTTON) {
-          await welcome(env, message.chat.id);
+        } else if (command === "/logout" && isBotAdmin(env, actorId)) {
+          await adminLogout(env, actorId);
+          await telegram(env, "sendMessage", {
+            chat_id: message.chat.id, text: "🔒 Выход из управления выполнен.",
+            reply_markup: persistentMenu(env, actorId)
+          });
+        } else if (/^\/(?:start|menu)(?:@\w+)?(?:\s|$)/i.test(raw) || raw === MAIN_BUTTON) {
+          await welcome(env, message.chat.id, actorId);
+        } else if (raw === CATALOG_BUTTON || /^\/catalog(?:@\w+)?$/i.test(raw)) {
+          await showCategories(env, cbFromMessage, await catalog());
+        } else if (raw === CART_BUTTON || /^\/cart(?:@\w+)?$/i.test(raw)) {
+          await showCart(env, cbFromMessage, await catalog(), 0);
+        } else if (raw === ADMIN_BUTTON || /^\/admin(?:@\w+)?$/i.test(raw)) {
+          if (isBotAdmin(env, actorId)) {
+            await handleAdminAction(env, cbFromMessage, "ad:home");
+          } else {
+            await telegram(env, "sendMessage", {
+              chat_id: message.chat.id,
+              text: "🔒 Этот раздел доступен только администратору. Воспользуйтесь каталогом или корзиной.",
+              reply_markup: persistentMenu(env, actorId)
+            });
+          }
         } else if (await maybeHandleAdminPassword(env, message)) {
-          // Пароль проверен, сообщение удалено по возможности.
+          // Проверяем пароль только после явного входа и в пределах времени.
+        } else {
+          await telegram(env, "sendMessage", {
+            chat_id: message.chat.id,
+            text: "Выберите раздел с помощью кнопок внизу: «Каталог», «Корзина» или «Главное меню».",
+            reply_markup: persistentMenu(env, actorId)
+          });
         }
       }
 
       const cb = update.callback_query;
       if (cb) {
-        await telegram(env, "answerCallbackQuery", { callback_query_id: cb.id });
+        // Истёкший callback не должен блокировать переходы между экранами.
+        try {
+          await telegram(env, "answerCallbackQuery", { callback_query_id: cb.id });
+        } catch (error) {
+          console.warn("answerCallbackQuery:", error.message);
+        }
         if (cb.message?.chat?.type !== "private") return new Response("OK");
         const action = String(cb.data || "");
         if (action === "noop") return new Response("OK");
@@ -1636,7 +1711,8 @@ export default {
         }
         const data = await catalog();
         const parts = action.split(":");
-        if (action === "catalog") await showCategories(env, cb, data);
+        if (action === "home") await showMainMenu(env, cb);
+        else if (action === "catalog") await showCategories(env, cb, data);
         else if (parts[0] === "c") await showCategory(env, cb, data, parts[1], Number(parts[2] || 0));
         else if (parts[0] === "p") await showProduct(env, cb, data, parts[1]);
         else if (parts[0] === "cl") await showColor(env, cb, data, parts[1], Number(parts[2]));
