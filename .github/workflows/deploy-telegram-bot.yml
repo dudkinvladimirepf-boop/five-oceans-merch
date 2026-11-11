@@ -32,6 +32,9 @@ jobs:
           node --check bot/worker.js
           node --check bot/prepare-deploy.mjs
 
+      - name: Test Telegram navigation and login
+        run: node --test bot/navigation.test.mjs
+
       - name: Verify live Worker settings and reuse its original D1
         run: node bot/prepare-deploy.mjs
 
